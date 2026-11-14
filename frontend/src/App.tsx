@@ -1,0 +1,384 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Building2, 
+  UploadCloud, 
+  PieChart, 
+  BarChart3, 
+  TrendingUp, 
+  Award, 
+  Compass, 
+  Globe2, 
+  FileText, 
+  Loader2, 
+  AlertCircle, 
+  Sparkles, 
+  RefreshCw,
+  Layers,
+  ArrowRight
+} from 'lucide-react';
+import { Navbar } from './components/Navbar';
+import { OverviewTab } from './components/OverviewTab';
+import { ReceiptsTab } from './components/ReceiptsTab';
+import { ExpenditureTab } from './components/ExpenditureTab';
+import { FiscalTab } from './components/FiscalTab';
+import { SectorsTab } from './components/SectorsTab';
+import { SchemesTab } from './components/SchemesTab';
+import { MacroTab } from './components/MacroTab';
+import { UploadModal } from './components/UploadModal';
+import { ChatDrawer } from './components/ChatDrawer';
+import { ReportExportModal } from './components/ReportExportModal';
+import { budgetApi } from './services/api';
+import { Workspace, CompleteAnalysis, AnalysisStatus } from './types/budget';
+
+type TabType = 'overview' | 'receipts' | 'expenditure' | 'fiscal' | 'sectors' | 'schemes' | 'macro';
+
+export default function App() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [analysisData, setAnalysisData] = useState<CompleteAnalysis | null>(null);
+  const [statusData, setStatusData] = useState<AnalysisStatus | null>(null);
+
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 1. Initial Load of Workspaces
+  useEffect(() => {
+    loadWorkspaces();
+  }, []);
+
+  // 2. Poll status if workspace is processing
+  useEffect(() => {
+    let interval: any;
+    if (currentWorkspace && currentWorkspace.processing_status !== 'completed' && currentWorkspace.processing_status !== 'failed') {
+      interval = setInterval(async () => {
+        try {
+          const status = await budgetApi.getAnalysisStatus(currentWorkspace.id);
+          setStatusData(status);
+          if (status.status === 'completed') {
+            clearInterval(interval);
+            loadAnalysis(currentWorkspace.id);
+            loadWorkspaces();
+          }
+        } catch (e) {
+          console.error('Status poll error:', e);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [currentWorkspace]);
+
+  // 3. Load analysis data when current workspace changes
+  useEffect(() => {
+    if (currentWorkspace && (currentWorkspace.analysis_completed || currentWorkspace.processing_status === 'completed')) {
+      loadAnalysis(currentWorkspace.id);
+    } else {
+      setAnalysisData(null);
+    }
+  }, [currentWorkspace]);
+
+  const loadWorkspaces = async () => {
+    setIsLoading(true);
+    try {
+      const res = await budgetApi.listWorkspaces();
+      setWorkspaces(res.workspaces);
+      if (res.workspaces.length > 0 && !currentWorkspace) {
+        setCurrentWorkspace(res.workspaces[0]);
+      }
+    } catch (e) {
+      console.error('Failed to load workspaces:', e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadAnalysis = async (workspaceId: string) => {
+    try {
+      const res = await budgetApi.getAnalysisResults(workspaceId);
+      setAnalysisData(res);
+    } catch (e) {
+      console.error('Failed to load analysis:', e);
+    }
+  };
+
+  const handleCreateSampleBudget = async () => {
+    setIsLoading(true);
+    try {
+      // Create a default union budget workspace with mock sample document
+      const ws = await budgetApi.createWorkspace({
+        name: 'Union Budget 2024-25 (Interim & Full)',
+        government_level: 'union',
+        financial_year: '2024-25',
+        description: 'Comprehensive Economic Analysis of Union Budget of India 2024-25',
+      });
+
+      // Upload a representative budget text file
+      const sampleBlob = new Blob([
+        `GOVERNMENT OF INDIA
+UNION BUDGET 2024-2025
+Key Economic Indicators and Budget Estimates (₹ Crore):
+Total Receipts: 3207200 Crore
+Total Expenditure: 4820512 Crore
+Revenue Receipts: 3129250 Crore
+Capital Receipts: 1761426 Crore
+Revenue Expenditure: 3709401 Crore
+Capital Expenditure: 1111111 Crore (3.4% of GDP)
+Gross Fiscal Deficit: 1613312 Crore (4.9% of GDP)
+Revenue Deficit: 580151 Crore
+Primary Deficit: 450000 Crore
+Tax Revenue:
+GST: 1067650 Crore
+Corporation Tax: 1020000 Crore
+Income Tax: 1156000 Crore
+Customs: 231102 Crore
+Excise: 318000 Crore
+Major Outlays:
+Defence: 621541 Crore
+Road Transport & Highways: 278000 Crore
+Railways: 255000 Crore
+Agriculture: 132000 Crore
+Rural Development: 180000 Crore
+Major Schemes:
+PM-KISAN: 60000 Crore
+MGNREGA: 86000 Crore
+PMAY: 54500 Crore
+Ayushman Bharat: 7500 Crore
+PLI Scheme: 6200 Crore
+Jal Jeevan Mission: 70163 Crore
+Nominal GDP Growth Assumption: 10.5%`
+      ], { type: 'text/plain' });
+
+      const sampleFile = new File([sampleBlob], 'Union_Budget_2024_25_Official_Summary.txt', { type: 'text/plain' });
+      await budgetApi.uploadDocuments(ws.id, [sampleFile]);
+      await budgetApi.startAnalysis(ws.id);
+
+      await loadWorkspaces();
+      setCurrentWorkspace(ws);
+    } catch (err: any) {
+      alert(`Error initializing sample budget: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const navTabs = [
+    { id: 'overview', label: 'Executive Overview', icon: PieChart },
+    { id: 'receipts', label: 'Receipts & Revenue', icon: BarChart3 },
+    { id: 'expenditure', label: 'Expenditure & Outlay', icon: Layers },
+    { id: 'fiscal', label: 'Fiscal Health & Deficit', icon: TrendingUp },
+    { id: 'sectors', label: 'Sectoral Analysis', icon: Compass },
+    { id: 'schemes', label: 'Schemes & Missions', icon: Award },
+    { id: 'macro', label: 'Macroeconomics', icon: Globe2 },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      
+      {/* Top Navbar */}
+      <Navbar
+        workspaces={workspaces}
+        currentWorkspace={currentWorkspace}
+        onSelectWorkspace={(w) => setCurrentWorkspace(w)}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenExport={() => setIsExportOpen(true)}
+        onToggleChat={() => setIsChatOpen(!isChatOpen)}
+        isChatOpen={isChatOpen}
+      />
+
+      {/* Main Workspace Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        {/* Workspace In-Progress / Processing Banner */}
+        {currentWorkspace && currentWorkspace.processing_status !== 'completed' && currentWorkspace.processing_status !== 'failed' && (
+          <div className="mb-6 p-5 rounded-2xl bg-slate-900 border border-blue-500/30 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Multi-Agent Economic Pipeline In Progress
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Stage: {statusData?.current_stage || 'Extracting tables & numerical data'}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-sm font-extrabold text-blue-400 font-mono">
+                  {statusData ? statusData.progress.toFixed(0) : (currentWorkspace.processing_progress || 0)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+              <div
+                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-500 rounded-full"
+                style={{ width: `${statusData ? statusData.progress : (currentWorkspace.processing_progress || 5)}%` }}
+              />
+            </div>
+
+            {/* Pipeline Stage Pills */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+              {(statusData?.stages || [
+                { name: 'Document OCR', status: 'completed' },
+                { name: 'Vector Store', status: 'in_progress' },
+                { name: 'Financial Extraction', status: 'pending' },
+                { name: 'Revenue & Outlay', status: 'pending' },
+                { name: 'Deficit & Sectors', status: 'pending' },
+                { name: 'Report Generation', status: 'pending' },
+              ]).map((st: any, i: number) => (
+                <div
+                  key={i}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-center border truncate ${
+                    st.status === 'completed'
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                      : st.status === 'in_progress'
+                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 animate-pulse'
+                      : 'bg-slate-800/40 border-slate-800 text-slate-500'
+                  }`}
+                >
+                  {st.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty State / Welcome Screen when no workspaces exist */}
+        {workspaces.length === 0 && !isLoading && (
+          <div className="py-16 text-center max-w-xl mx-auto space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 mx-auto shadow-xl shadow-blue-500/20 flex items-center justify-center">
+              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
+                <Building2 className="h-8 w-8 text-blue-400" />
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-2xl font-extrabold text-white tracking-tight">
+                Budget Intelligence Platform
+              </h2>
+              <p className="text-sm text-slate-400 mt-2 leading-relaxed">
+                Analyze any Indian Union or State Government Budget across any financial year. Upload your official budget speech, receipt/expenditure statements, and demands for grants for instant economic intelligence.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <button
+                onClick={() => setIsUploadOpen(true)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all"
+              >
+                <UploadCloud className="h-4 w-4" />
+                <span>Upload Budget Document</span>
+              </button>
+
+              <button
+                onClick={handleCreateSampleBudget}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all"
+              >
+                <Sparkles className="h-4 w-4 text-indigo-400" />
+                <span>Explore Union Budget 2024-25 Demo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Workspace Active Analytics */}
+        {currentWorkspace && (
+          <div className="space-y-6">
+            
+            {/* Header info badge */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg sm:text-xl font-extrabold text-white">
+                    {currentWorkspace.name}
+                  </h1>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    {currentWorkspace.government_level}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Financial Year: <span className="font-semibold text-slate-200">{currentWorkspace.financial_year || '2024-25'}</span>
+                  {currentWorkspace.state_name && ` • State: ${currentWorkspace.state_name}`}
+                </p>
+              </div>
+
+              {/* Navigation Tabs Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar">
+                {navTabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as TabType)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                          : 'bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+                      }`}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Tab Contents */}
+            {analysisData ? (
+              <div>
+                {activeTab === 'overview' && <OverviewTab data={analysisData} />}
+                {activeTab === 'receipts' && <ReceiptsTab data={analysisData} />}
+                {activeTab === 'expenditure' && <ExpenditureTab data={analysisData} />}
+                {activeTab === 'fiscal' && <FiscalTab data={analysisData} />}
+                {activeTab === 'sectors' && <SectorsTab data={analysisData} />}
+                {activeTab === 'schemes' && <SchemesTab data={analysisData} />}
+                {activeTab === 'macro' && <MacroTab data={analysisData} />}
+              </div>
+            ) : (
+              <div className="p-12 text-center text-slate-500 bg-slate-900/50 rounded-2xl border border-slate-800">
+                <Loader2 className="h-6 w-6 animate-spin text-blue-400 mx-auto mb-2" />
+                <p className="text-sm">Synthesizing budget analysis...</p>
+              </div>
+            )}
+
+          </div>
+        )}
+
+      </main>
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={isUploadOpen}
+        onClose={() => setIsUploadOpen(false)}
+        onWorkspaceCreated={(ws) => {
+          loadWorkspaces();
+          setCurrentWorkspace(ws);
+        }}
+      />
+
+      {/* Export Report Modal */}
+      <ReportExportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        workspaceId={currentWorkspace?.id || null}
+        budgetName={currentWorkspace?.name}
+      />
+
+      {/* Slide-out AI Chat Drawer */}
+      <ChatDrawer
+        isOpen={isChatOpen}
+        onClose={() => setIsChatOpen(false)}
+        workspaceId={currentWorkspace?.id || null}
+        budgetName={currentWorkspace?.name}
+      />
+
+    </div>
+  );
+}
+
