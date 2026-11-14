@@ -1,0 +1,24 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: budget_intelligence_platform
+    restart: always
+    ports:
+      - "80:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-qwen/qwen3.8-27b}
+      - DATABASE_URL=sqlite+aiosqlite:///./budget_intelligence.db
+      - DATABASE_URL_SYNC=sqlite:///./budget_intelligence.db
+      - SECRET_KEY=${SECRET_KEY:-budget-intelligence-super-secret-key-production}
+    volumes:
+      - budget_data:/app/backend/chroma_db
+      - budget_uploads:/app/backend/uploads
+      - budget_reports:/app/backend/reports
+
+volumes:
+  budget_data:
+  budget_uploads:
+  budget_reports:
