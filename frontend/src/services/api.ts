@@ -3,14 +3,16 @@ import { Workspace, AnalysisStatus, CompleteAnalysis, ChatMessage } from '../typ
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const metaEnv = (import.meta as any).env || {};
 const envApiUrl = metaEnv.VITE_API_URL || metaEnv.VITE_BACKEND_URL;
-export const API_BASE = envApiUrl 
-  ? (envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl.replace(/\/$/, '')}/api`)
-  : (isLocal ? 'http://127.0.0.1:8000/api' : '/api');
+export const API_BASE = isLocal
+  ? 'http://127.0.0.1:8000/api'
+  : (envApiUrl 
+      ? (envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl.replace(/\/$/, '')}/api`)
+      : 'https://budget-analysis-rohit-aman.onrender.com/api');
 
 export const budgetApi = {
   // Health Check
   async checkHealth(): Promise<{ status: string; service: string; ai_engine?: string }> {
-    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(20000) });
     if (!res.ok) throw new Error('Backend unhealthy');
     return res.json();
   },

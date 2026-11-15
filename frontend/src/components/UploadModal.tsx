@@ -169,12 +169,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               : 'bg-red-500/10 border-red-500/20 text-red-300'
           }`}>
             {backendOk === null ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /><span>Checking backend connection...</span></>
+              <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /><span>Connecting to backend AI engine at {API_BASE}...</span></>
             ) : backendOk ? (
-              <><Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-400" /><span>Backend connected — AI Analysis Engine ready at <code className="font-mono bg-emerald-500/10 px-1 rounded">port 8000</code></span></>
+              <><Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-400" /><span>Backend connected — AI Analysis Engine active at <code className="font-mono bg-emerald-500/10 px-1 rounded">{API_BASE}</code></span></>
             ) : (
-              <><WifiOff className="h-3.5 w-3.5 shrink-0 text-red-400" />
-              <span>Backend not reachable at <code className="font-mono bg-red-500/10 px-1 rounded">http://127.0.0.1:8000</code> — Run: <code className="font-mono bg-red-500/10 px-1 rounded">cd backend &amp;&amp; python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload</code></span></>
+              <><WifiOff className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <span>Connecting to cloud backend at <code className="font-mono bg-amber-500/10 px-1 rounded">{API_BASE}</code>. If Render is waking from sleep, please wait a few seconds and retry.</span></>
             )}
           </div>
 
