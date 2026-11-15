@@ -1,7 +1,11 @@
 import { Workspace, AnalysisStatus, CompleteAnalysis, ChatMessage } from '../types/budget';
 
 const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-export const API_BASE = isLocal ? 'http://127.0.0.1:8000/api' : '/api';
+const metaEnv = (import.meta as any).env || {};
+const envApiUrl = metaEnv.VITE_API_URL || metaEnv.VITE_BACKEND_URL;
+export const API_BASE = envApiUrl 
+  ? (envApiUrl.endsWith('/api') ? envApiUrl : `${envApiUrl.replace(/\/$/, '')}/api`)
+  : (isLocal ? 'http://127.0.0.1:8000/api' : '/api');
 
 export const budgetApi = {
   // Health Check

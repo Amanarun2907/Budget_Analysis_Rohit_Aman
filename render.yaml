@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: budget-intelligence-api
+    runtime: python
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GROQ_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: qwen/qwen3.8-27b
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./budget_intelligence.db
+      - key: DATABASE_URL_SYNC
+        value: sqlite:///./budget_intelligence.db
