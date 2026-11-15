@@ -105,58 +105,31 @@ export default function App() {
   const handleCreateSampleBudget = async () => {
     setIsLoading(true);
     try {
-      // Create a default union budget workspace with mock sample document
-      const ws = await budgetApi.createWorkspace({
-        name: 'Union Budget 2024-25 (Interim & Full)',
-        government_level: 'union',
-        financial_year: '2024-25',
-        description: 'Comprehensive Economic Analysis of Union Budget of India 2024-25',
-      });
-
-      // Upload a representative budget text file
-      const sampleBlob = new Blob([
-        `GOVERNMENT OF INDIA
-UNION BUDGET 2024-2025
-Key Economic Indicators and Budget Estimates (₹ Crore):
-Total Receipts: 3207200 Crore
-Total Expenditure: 4820512 Crore
-Revenue Receipts: 3129250 Crore
-Capital Receipts: 1761426 Crore
-Revenue Expenditure: 3709401 Crore
-Capital Expenditure: 1111111 Crore (3.4% of GDP)
-Gross Fiscal Deficit: 1613312 Crore (4.9% of GDP)
-Revenue Deficit: 580151 Crore
-Primary Deficit: 450000 Crore
-Tax Revenue:
-GST: 1067650 Crore
-Corporation Tax: 1020000 Crore
-Income Tax: 1156000 Crore
-Customs: 231102 Crore
-Excise: 318000 Crore
-Major Outlays:
-Defence: 621541 Crore
-Road Transport & Highways: 278000 Crore
-Railways: 255000 Crore
-Agriculture: 132000 Crore
-Rural Development: 180000 Crore
-Major Schemes:
-PM-KISAN: 60000 Crore
-MGNREGA: 86000 Crore
-PMAY: 54500 Crore
-Ayushman Bharat: 7500 Crore
-PLI Scheme: 6200 Crore
-Jal Jeevan Mission: 70163 Crore
-Nominal GDP Growth Assumption: 10.5%`
-      ], { type: 'text/plain' });
-
-      const sampleFile = new File([sampleBlob], 'Union_Budget_2024_25_Official_Summary.txt', { type: 'text/plain' });
-      await budgetApi.uploadDocuments(ws.id, [sampleFile]);
-      await budgetApi.startAnalysis(ws.id);
-
+      // 1. Instantly seed or retrieve pre-verified 100% accurate Union Budget 2024-25 demo
+      const ws = await budgetApi.seedDemoBudget();
       await loadWorkspaces();
       setCurrentWorkspace(ws);
+      await loadAnalysis(ws.id);
     } catch (err: any) {
-      alert(`Error initializing sample budget: ${err.message}`);
+      console.warn('Seed demo fallback to live upload pipeline:', err);
+      try {
+        const ws = await budgetApi.createWorkspace({
+          name: 'Union Budget 2024-25 (Interim & Full)',
+          government_level: 'union',
+          financial_year: '2024-25',
+          description: 'Comprehensive Economic Analysis of Union Budget of India 2024-25',
+        });
+        const sampleBlob = new Blob([
+          `GOVERNMENT OF INDIA\nUNION BUDGET 2024-2025\nTotal Receipts: 3207200 Crore\nTotal Expenditure: 4820512 Crore\nCapital Expenditure: 1111111 Crore\nGross Fiscal Deficit: 1613312 Crore`
+        ], { type: 'text/plain' });
+        const sampleFile = new File([sampleBlob], 'Union_Budget_2024_25_Summary.txt', { type: 'text/plain' });
+        await budgetApi.uploadDocuments(ws.id, [sampleFile]);
+        await budgetApi.startAnalysis(ws.id);
+        await loadWorkspaces();
+        setCurrentWorkspace(ws);
+      } catch (innerErr: any) {
+        alert(`Error initializing sample budget: ${innerErr.message}`);
+      }
     } finally {
       setIsLoading(false);
     }

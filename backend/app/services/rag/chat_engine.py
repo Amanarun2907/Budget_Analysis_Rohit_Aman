@@ -39,7 +39,7 @@ class BudgetChatEngine:
         # 3. If Groq client is configured, call LLM with candidate models
         if self.client:
             candidate_models = []
-            for m in [self.model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]:
+            for m in ["openai/gpt-oss-20b", self.model, "qwen/qwen3.8-27b", "openai/gpt-oss-120b"]:
                 if m and m not in candidate_models:
                     candidate_models.append(m)
             
@@ -68,8 +68,9 @@ Instructions:
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": user_prompt},
                         ],
-                        temperature=0.2,
-                        max_tokens=4000,
+                        temperature=settings.LLM_TEMPERATURE,
+                        max_tokens=2000,
+                        timeout=15.0,
                     )
                     
                     answer = response.choices[0].message.content or ""

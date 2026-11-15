@@ -262,6 +262,18 @@ class ReportGenerator:
                 spaceAfter=6,
             )
             
+            def _fmt_val(v, default=0):
+                if v is None:
+                    return f"{default:,}"
+                if isinstance(v, (int, float)):
+                    return f"{v:,.0f}" if float(v).is_integer() else f"{v:,.2f}"
+                import re
+                try:
+                    cleaned = float(re.sub(r'[^\d.-]', '', str(v)))
+                    return f"{cleaned:,.0f}" if cleaned.is_integer() else f"{cleaned:,.2f}"
+                except:
+                    return str(v or default)
+
             elements = []
             
             elements.append(Paragraph(f"Budget Intelligence Report: {gov.replace('_', ' ')}", title_style))
@@ -276,12 +288,12 @@ class ReportGenerator:
             elements.append(Paragraph("2. Key Fiscal Indicators", h2_style))
             table_data = [
                 ["Indicator", "Amount / Ratio", "Classification"],
-                ["Total Expenditure", f"₹{overview.get('total_expenditure', 0):,} Cr", "Budget Size"],
-                ["Total Receipts", f"₹{overview.get('total_receipts', 0):,} Cr", "Total Inflows"],
-                ["Revenue Expenditure", f"₹{overview.get('revenue_expenditure', 0):,} Cr", "Committed & Recurring"],
-                ["Capital Expenditure", f"₹{overview.get('capital_expenditure', 0):,} Cr", "Asset Creation"],
-                ["Gross Fiscal Deficit", f"₹{overview.get('fiscal_deficit', 0):,} Cr", f"{overview.get('fiscal_deficit_gdp_ratio', 5.1)}% of GDP"],
-                ["Revenue Deficit", f"₹{overview.get('revenue_deficit', 0):,} Cr", "Consumption Gap"],
+                ["Total Expenditure", f"₹{_fmt_val(overview.get('total_expenditure'))} Cr", "Budget Size"],
+                ["Total Receipts", f"₹{_fmt_val(overview.get('total_receipts'))} Cr", "Total Inflows"],
+                ["Revenue Expenditure", f"₹{_fmt_val(overview.get('revenue_expenditure'))} Cr", "Committed & Recurring"],
+                ["Capital Expenditure", f"₹{_fmt_val(overview.get('capital_expenditure'))} Cr", "Asset Creation"],
+                ["Gross Fiscal Deficit", f"₹{_fmt_val(overview.get('fiscal_deficit'))} Cr", f"{overview.get('fiscal_deficit_gdp_ratio', 4.9)}% of GDP"],
+                ["Revenue Deficit", f"₹{_fmt_val(overview.get('revenue_deficit'))} Cr", "Consumption Gap"],
             ]
             
             t = Table(table_data, colWidths=[200, 150, 150])
@@ -302,10 +314,12 @@ class ReportGenerator:
             sectors = data.get("sectors", {}).get("sectors", [])[:10]
             sec_table_data = [["Sector Name", "Allocation (₹ Cr)", "Share (%)"]]
             for s in sectors:
+                alloc = s.get('allocation') or s.get('total_allocation', 0)
+                pct = s.get('percentage') or s.get('percentage_of_total', 0)
                 sec_table_data.append([
                     str(s.get("sector_name") or s.get("name", ""))[:35],
-                    f"₹{s.get('allocation', 0):,}",
-                    f"{s.get('percentage', 0)}%"
+                    f"₹{_fmt_val(alloc)}",
+                    f"{pct}%"
                 ])
             sec_table = Table(sec_table_data, colWidths=[240, 130, 130])
             sec_table.setStyle(TableStyle([

@@ -92,6 +92,18 @@ export const budgetApi = {
     return res.json();
   },
 
+  async seedDemoBudget(): Promise<Workspace> {
+    const res = await fetch(`${API_BASE}/analysis/seed-demo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to seed demo budget');
+    }
+    return res.json();
+  },
+
   async getAnalysisStatus(workspaceId: string): Promise<AnalysisStatus> {
     const res = await fetch(`${API_BASE}/analysis/status/${workspaceId}`);
     if (!res.ok) throw new Error('Failed to fetch analysis status');
