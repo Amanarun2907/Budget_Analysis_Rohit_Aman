@@ -40,6 +40,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [budgetName, setBudgetName] = useState<string>('Union Budget 2024-25');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [uploadStage, setUploadStage] = useState<'idle' | 'creating' | 'uploading' | 'starting'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [backendOk, setBackendOk] = useState<boolean | null>(null);
 
@@ -106,10 +107,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     }
 
     setIsSubmitting(true);
+    setUploadStage('creating');
     setError(null);
 
     try {
-      // 1. Create Workspace
+      // 1. Ping backend in background to wake up Render (non-blocking)
+      budgetApi.checkHealth().catch(() => {});
+
+      // 2. Create Workspace
       const workspace = await budgetApi.createWorkspace({
         name: budgetName,
         government_level: govLevel,
@@ -118,19 +123,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         description: `${govLevel === 'union' ? 'Union Budget of India' : `${stateName} State Budget`} for ${fy}`,
       });
 
-      // 2. Upload Documents
+      // 3. Upload Documents
+      setUploadStage('uploading');
       await budgetApi.uploadDocuments(workspace.id, selectedFiles);
 
-      // 3. Initiate Analysis Pipeline
-      await budgetApi.startAnalysis(workspace.id);
-
+      // 4. Close modal IMMEDIATELY — user sees dashboard while analysis runs in background
+      setUploadStage('starting');
       onWorkspaceCreated(workspace);
       onClose();
+
+      // 5. Fire analysis as non-blocking background job (after modal closed)
+      budgetApi.startAnalysis(workspace.id).catch((err) => {
+        console.warn('Background analysis start error (non-fatal):', err);
+      });
+
     } catch (err: any) {
       const msg = err.message || 'Failed to upload and initiate budget analysis';
       setError(msg);
-    } finally {
       setIsSubmitting(false);
+      setUploadStage('idle');
     }
   };
 
@@ -347,7 +358,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Processing &amp; Analyzing...</span>
+                  <span>
+                    {uploadStage === 'creating' ? 'Creating Workspace...' :
+                     uploadStage === 'uploading' ? 'Uploading Documents...' :
+                     uploadStage === 'starting' ? 'Starting Analysis...' :
+                     'Processing...'}
+                  </span>
                 </>
               ) : (
                 <>

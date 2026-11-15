@@ -45,8 +45,8 @@ class BudgetAgentSystem:
                         ],
                         response_format={"type": "json_object"},
                         temperature=settings.LLM_TEMPERATURE,
-                        max_tokens=min(max_tokens, 2200),
-                        timeout=15.0,
+                        max_tokens=min(max_tokens, 3500),
+                        timeout=25.0,
                     )
                     content = response.choices[0].message.content or ""
                     if content.strip():
@@ -60,8 +60,8 @@ class BudgetAgentSystem:
                             {"role": "user", "content": user_prompt},
                         ],
                         temperature=settings.LLM_TEMPERATURE,
-                        max_tokens=min(max_tokens, 2200),
-                        timeout=15.0,
+                        max_tokens=min(max_tokens, 3500),
+                        timeout=25.0,
                     )
                     content = response.choices[0].message.content or ""
                     if content.strip():
@@ -110,7 +110,7 @@ class BudgetAgentSystem:
         progress_callback: Optional[Callable] = None,
     ) -> Dict[str, Any]:
         """Execute orchestrated pipeline across specialized agents with concurrent execution batches."""
-        agent_text = text[:35000] if len(text) > 35000 else text
+        agent_text = text[:25000] if len(text) > 25000 else text
         table_summary = self._format_tables(tables)
         
         results = {}
