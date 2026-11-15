@@ -17,6 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
+import { LandingHero } from './components/LandingHero';
 import { OverviewTab } from './components/OverviewTab';
 import { ReceiptsTab } from './components/ReceiptsTab';
 import { ExpenditureTab } from './components/ExpenditureTab';
@@ -84,9 +85,7 @@ export default function App() {
     try {
       const res = await budgetApi.listWorkspaces();
       setWorkspaces(res.workspaces);
-      if (res.workspaces.length > 0 && !currentWorkspace) {
-        setCurrentWorkspace(res.workspaces[0]);
-      }
+      // Intentionally do NOT auto-select workspaces so user always lands on the overview & upload page first
     } catch (e) {
       console.error('Failed to load workspaces:', e);
     } finally {
@@ -185,6 +184,7 @@ Nominal GDP Growth Assumption: 10.5%`
         onOpenExport={() => setIsExportOpen(true)}
         onToggleChat={() => setIsChatOpen(!isChatOpen)}
         isChatOpen={isChatOpen}
+        onGoHome={() => setCurrentWorkspace(null)}
       />
 
       {/* Main Workspace Area */}
@@ -247,47 +247,30 @@ Nominal GDP Growth Assumption: 10.5%`
           </div>
         )}
 
-        {/* Empty State / Welcome Screen when no workspaces exist */}
-        {workspaces.length === 0 && !isLoading && (
-          <div className="py-16 text-center max-w-xl mx-auto space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 p-0.5 mx-auto shadow-xl shadow-blue-500/20 flex items-center justify-center">
-              <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
-                <Building2 className="h-8 w-8 text-blue-400" />
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-extrabold text-white tracking-tight">
-                Budget Intelligence Platform
-              </h2>
-              <p className="text-sm text-slate-400 mt-2 leading-relaxed">
-                Analyze any Indian Union or State Government Budget across any financial year. Upload your official budget speech, receipt/expenditure statements, and demands for grants for instant economic intelligence.
-              </p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <button
-                onClick={() => setIsUploadOpen(true)}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition-all"
-              >
-                <UploadCloud className="h-4 w-4" />
-                <span>Upload Budget Document</span>
-              </button>
-
-              <button
-                onClick={handleCreateSampleBudget}
-                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs flex items-center justify-center gap-2 transition-all"
-              >
-                <Sparkles className="h-4 w-4 text-indigo-400" />
-                <span>Explore Union Budget 2024-25 Demo</span>
-              </button>
-            </div>
-          </div>
+        {/* Dedicated Landing Page & Platform Overview (Shown when no specific budget is selected) */}
+        {!currentWorkspace && (
+          <LandingHero
+            workspaces={workspaces}
+            onOpenUpload={() => setIsUploadOpen(true)}
+            onSelectWorkspace={(w) => setCurrentWorkspace(w)}
+            onExploreDemo={handleCreateSampleBudget}
+            isDemoLoading={isLoading}
+          />
         )}
 
-        {/* Workspace Active Analytics */}
+        {/* Workspace Active Analytics Dashboard (Shown after budget selection/upload) */}
         {currentWorkspace && (
           <div className="space-y-6">
+
+            {/* Navigation Breadcrumb / Back button */}
+            <div className="flex items-center justify-between pb-1">
+              <button
+                onClick={() => setCurrentWorkspace(null)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 hover:bg-slate-800 text-blue-400 hover:text-blue-300 border border-slate-800 transition-colors shadow-sm"
+              >
+                <span>← Back to Platform Overview &amp; Upload</span>
+              </button>
+            </div>
             
             {/* Header info badge */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800/80">
