@@ -116,6 +116,11 @@ export const SectorsTab: React.FC<SectorsTabProps> = ({ data }) => {
       )}
 
       {/* Main Split: Sector Selector List + Sector Detail Panel */}
+      {sectorsList.length === 0 ? (
+        <div className="p-12 text-center text-sm text-slate-500 border border-slate-800 rounded-2xl bg-slate-900">
+          No itemized sectoral breakdown was detected in the uploaded document. Please refer to the Overview, Receipts, and Expenditure tabs for aggregate budgetary data.
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left: Sector Selector List */}
@@ -242,6 +247,7 @@ export const SectorsTab: React.FC<SectorsTabProps> = ({ data }) => {
         </div>
 
       </div>
+      )}
 
     </div>
   );

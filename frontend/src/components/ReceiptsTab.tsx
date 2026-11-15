@@ -35,17 +35,18 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
   const overview = data.analysis?.overview || {};
 
   const totalReceipts = receipts.total_receipts || overview.total_receipts || 0;
-  const revenueReceipts = receipts.revenue_receipts || overview.revenue_receipts || (totalReceipts * 0.76);
-  const capitalReceipts = receipts.capital_receipts || overview.capital_receipts || (totalReceipts * 0.24);
+  const revenueReceipts = receipts.revenue_receipts || overview.revenue_receipts || 0;
+  const capitalReceipts = receipts.capital_receipts || overview.capital_receipts || 0;
 
-  // Receipt Composition for Pie Chart
-  const compositionData = receipts.receipt_composition && receipts.receipt_composition.length > 0
-    ? receipts.receipt_composition
-    : [
-        { name: 'Gross Tax Revenue', value: revenueReceipts * 0.85, percentage: 65 },
-        { name: 'Non-Tax Revenue', value: revenueReceipts * 0.15, percentage: 11 },
-        { name: 'Borrowings & Capital Receipts', value: capitalReceipts, percentage: 24 },
-      ];
+  // Receipt Composition for Pie Chart (only from actual extracted data)
+  const compositionData = (receipts.receipt_composition && receipts.receipt_composition.length > 0)
+    ? receipts.receipt_composition.filter((c: any) => c.value && c.value > 0)
+    : (revenueReceipts > 0 || capitalReceipts > 0)
+    ? [
+        ...(revenueReceipts > 0 ? [{ name: 'Revenue Receipts', value: revenueReceipts, percentage: totalReceipts ? Math.round((revenueReceipts / totalReceipts) * 100) : 0 }] : []),
+        ...(capitalReceipts > 0 ? [{ name: 'Capital Receipts & Borrowings', value: capitalReceipts, percentage: totalReceipts ? Math.round((capitalReceipts / totalReceipts) * 100) : 0 }] : []),
+      ]
+    : [];
 
   // Tax Revenue Breakdown Data for Bar Chart
   const taxData = receipts.tax_revenue || {};
@@ -70,17 +71,6 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
       });
     }
   });
-
-  // Default tax chart data if document did not list individual items
-  if (taxChartData.length === 0) {
-    taxChartData.push(
-      { name: 'GST', amount: Math.round(revenueReceipts * 0.35) },
-      { name: 'Income Tax', amount: Math.round(revenueReceipts * 0.32) },
-      { name: 'Corporation Tax', amount: Math.round(revenueReceipts * 0.28) },
-      { name: 'Customs Duty', amount: Math.round(revenueReceipts * 0.08) },
-      { name: 'Excise Duties', amount: Math.round(revenueReceipts * 0.09) }
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -146,26 +136,32 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
           </h4>
           <p className="text-xs text-slate-400 mb-4">Breakdown by Tax, Non-Tax, and Borrowings</p>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={compositionData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={85}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name.split(' ')[0]} (${(percent * 100).toFixed(0)}%)`}
-                >
-                  {compositionData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {compositionData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={compositionData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={85}
+                    dataKey="value"
+                    label={({ name, percent }) => `${(name || '').split(' ')[0]} (${((percent || 0) * 100).toFixed(0)}%)`}
+                  >
+                    {compositionData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                Receipt composition categories not itemized in uploaded document
+              </div>
+            )}
           </div>
         </div>
 
@@ -177,17 +173,23 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
           </h4>
           <p className="text-xs text-slate-400 mb-4">Collection across major tax classifications in ₹ Crore</p>
           <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={taxChartData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
-                <XAxis type="number" stroke="#64748b" fontSize={10} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
-                <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={11} width={110} />
-                <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                />
-                <Bar dataKey="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {taxChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={taxChartData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                  <XAxis type="number" stroke="#64748b" fontSize={10} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
+                  <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={11} width={110} />
+                  <Tooltip
+                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                  />
+                  <Bar dataKey="amount" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                Itemized tax breakdown not specified in uploaded document
+              </div>
+            )}
           </div>
         </div>
 

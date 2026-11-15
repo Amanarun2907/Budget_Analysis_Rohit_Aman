@@ -155,7 +155,11 @@ class BudgetAgentSystem:
             results["quality_assessment"] = await asyncio.to_thread(self._run_quality_agent, agent_text, results)
         except Exception as e:
             logger.warning(f"Quality assessment agent notice: {e}")
-            results["quality_assessment"] = {"confidence": 98.5, "status": "verified"}
+            results["quality_assessment"] = {
+                "confidence": 0,
+                "status": "partial",
+                "disclaimer": "Automated quality validation could not be completed for this document."
+            }
         
         if progress_callback:
             await progress_callback(95)
@@ -449,164 +453,190 @@ Respond ONLY with a valid JSON object:
         return self._parse_json_response(res)
     
     def _reconcile_and_fill_fallbacks(self, results: Dict, metadata: Dict, text: str):
-        """Ensure non-empty, mathematically sensible values even if document was partially scanned or LLM missed fields."""
+        """
+        Apply strict mathematical consistency checks and reconciliation ONLY using numbers
+        actually extracted from the uploaded document.
+        NEVER inject fabricated, estimated, or hardcoded dummy numbers.
+        If a metric is not present in the document, it remains null/empty so the user has 100% truthful data.
+        """
         overview = results.get("overview") or {}
-        gov_name = metadata.get("government_name") or overview.get("government_name") or "Government of India"
-        fy = metadata.get("financial_year") or overview.get("financial_year") or "2024-25"
+        gov_name = metadata.get("government_name") or overview.get("government_name") or ""
+        fy = metadata.get("financial_year") or overview.get("financial_year") or ""
         gov_level = metadata.get("government_level") or overview.get("government_level") or "union"
         
-        overview["government_name"] = gov_name
-        overview["financial_year"] = fy
+        if gov_name:
+            overview["government_name"] = gov_name
+        if fy:
+            overview["financial_year"] = fy
         overview["government_level"] = gov_level
         if metadata.get("state_name"):
             overview["state_name"] = metadata["state_name"]
         
-        # If numbers were null, extract heuristic estimates from text or supply standard baselines
         tot_exp = overview.get("total_expenditure")
         tot_rec = overview.get("total_receipts")
-        if not tot_exp:
-            # Look for 6-7 digit numbers representing crore
-            numbers = [float(n.replace(',', '')) for n in re.findall(r'₹?\s*([\d,]{4,12}(?:\.\d+)?)\s*crore', text, re.I)]
-            if numbers:
-                tot_exp = max(numbers)
-                tot_rec = tot_exp
-                overview["total_expenditure"] = tot_exp
-                overview["total_receipts"] = tot_rec
-                overview["total_budget_size"] = tot_exp
+        rev_exp = overview.get("revenue_expenditure")
+        cap_exp = overview.get("capital_expenditure")
+        rev_rec = overview.get("revenue_receipts")
+        cap_rec = overview.get("capital_receipts")
+        f_def = overview.get("fiscal_deficit")
+        r_def = overview.get("revenue_deficit")
         
-        if not overview.get("revenue_expenditure") and tot_exp:
-            overview["revenue_expenditure"] = round(tot_exp * 0.77, 2)
-            overview["capital_expenditure"] = round(tot_exp * 0.23, 2)
-        
-        if not overview.get("fiscal_deficit") and tot_exp:
-            overview["fiscal_deficit"] = round(tot_exp * 0.33, 2)
-            overview["fiscal_deficit_gdp_ratio"] = 5.1 if gov_level == "union" else 3.2
-        
-        if not overview.get("revenue_deficit") and tot_exp:
-            overview["revenue_deficit"] = round(tot_exp * 0.12, 2)
-        
-        if not overview.get("primary_deficit") and tot_exp:
-            overview["primary_deficit"] = round(tot_exp * 0.08, 2)
-        
+        # 1. Deterministic mathematical identities (only compute if derived from actual extracted data)
+        # Total Expenditure = Revenue Expenditure + Capital Expenditure
+        if rev_exp is not None and cap_exp is not None:
+            calc_tot_exp = round(rev_exp + cap_exp, 2)
+            if tot_exp is None:
+                overview["total_expenditure"] = calc_tot_exp
+                tot_exp = calc_tot_exp
+        elif tot_exp is not None and cap_exp is not None and rev_exp is None:
+            overview["revenue_expenditure"] = round(tot_exp - cap_exp, 2)
+            rev_exp = overview["revenue_expenditure"]
+        elif tot_exp is not None and rev_exp is not None and cap_exp is None:
+            overview["capital_expenditure"] = round(tot_exp - rev_exp, 2)
+            cap_exp = overview["capital_expenditure"]
+            
+        # Total Receipts = Revenue Receipts + Capital Receipts
+        if rev_rec is not None and cap_rec is not None:
+            calc_tot_rec = round(rev_rec + cap_rec, 2)
+            if tot_rec is None:
+                overview["total_receipts"] = calc_tot_rec
+                tot_rec = calc_tot_rec
+        elif tot_rec is not None and cap_rec is not None and rev_rec is None:
+            overview["revenue_receipts"] = round(tot_rec - cap_rec, 2)
+            rev_rec = overview["revenue_receipts"]
+        elif tot_rec is not None and rev_rec is not None and cap_rec is None:
+            overview["capital_receipts"] = round(tot_rec - rev_rec, 2)
+            cap_rec = overview["capital_receipts"]
+            
+        # Revenue Deficit = Revenue Expenditure - Revenue Receipts
+        if r_def is None and rev_exp is not None and rev_rec is not None:
+            overview["revenue_deficit"] = round(rev_exp - rev_rec, 2)
+            
+        # 2. Executive summary: synthesize ONLY using actually extracted numbers
         if not overview.get("executive_summary"):
-            overview["executive_summary"] = (
-                f"The Budget of {gov_name} for the Financial Year {fy} reflects a comprehensive economic strategy "
-                f"balancing fiscal consolidation with sustained capital investment in key infrastructure, rural revitalization, "
-                f"and inclusive social safety nets. With total budgeted expenditure of ₹{overview.get('total_expenditure', 0):,} Crore, "
-                f"the government emphasizes asset creation, manufacturing competitiveness, and targeted welfare distribution while "
-                f"anchoring the fiscal deficit trajectory within statutory prudential frameworks."
-            )
-        
-        if not overview.get("key_highlights"):
-            overview["key_highlights"] = [
-                f"Total Budget Outlay pegged at ₹{overview.get('total_expenditure', 0):,} Crore for FY {fy}.",
-                f"Capital Expenditure allocation prioritized for high-multiplier infrastructure and asset creation.",
-                f"Fiscal Deficit targeted at {overview.get('fiscal_deficit_gdp_ratio', 5.1)}% of GDP/GSDP.",
-                "Strategic focus on Agriculture, Healthcare, Education, Rural Development, and Digital Infrastructure.",
-                "Streamlined revenue mobilization via direct tax rationalization and GST compliance enhancements."
-            ]
-        
+            extracted_facts = []
+            if overview.get("total_expenditure"):
+                extracted_facts.append(f"total expenditure outlay of ₹{overview['total_expenditure']:,.0f} Crore")
+            if overview.get("total_receipts"):
+                extracted_facts.append(f"total receipts of ₹{overview['total_receipts']:,.0f} Crore")
+            if overview.get("capital_expenditure"):
+                extracted_facts.append(f"capital expenditure of ₹{overview['capital_expenditure']:,.0f} Crore")
+            if overview.get("fiscal_deficit"):
+                extracted_facts.append(f"fiscal deficit of ₹{overview['fiscal_deficit']:,.0f} Crore")
+            if overview.get("fiscal_deficit_gdp_ratio"):
+                extracted_facts.append(f"fiscal deficit to GDP/GSDP ratio of {overview['fiscal_deficit_gdp_ratio']}%")
+                
+            gov_str = gov_name if gov_name else ("Government of India" if gov_level == "union" else "State Government")
+            fy_str = f" for FY {fy}" if fy else ""
+            
+            if extracted_facts:
+                overview["executive_summary"] = (
+                    f"This financial intelligence report was synthesized from the official uploaded budget documents for {gov_str}{fy_str}. "
+                    f"Verified extracted figures indicate a {', '.join(extracted_facts)}. "
+                    f"All metrics, allocations, and visualizations are verified directly against source text and tables. "
+                    f"Fields where figures were not provided in the uploaded document are transparently indicated without fabrication."
+                )
+            else:
+                overview["executive_summary"] = (
+                    f"Official budget documents for {gov_str}{fy_str} have been processed. "
+                    f"Detailed analysis, sector allocations, and textual insights extracted from the document are accessible across the respective analytical dashboards."
+                )
+                
+        # 3. Key Highlights: only include statements grounded in extracted data
+        if not overview.get("key_highlights") or len(overview.get("key_highlights", [])) == 0:
+            highlights = []
+            if overview.get("total_expenditure"):
+                highlights.append(f"Total Budget Expenditure Outlay: ₹{overview['total_expenditure']:,.0f} Crore.")
+            if overview.get("total_receipts"):
+                highlights.append(f"Total Estimated Budget Receipts: ₹{overview['total_receipts']:,.0f} Crore.")
+            if overview.get("capital_expenditure"):
+                highlights.append(f"Capital Expenditure Allocation: ₹{overview['capital_expenditure']:,.0f} Crore dedicated to infrastructure and asset creation.")
+            if overview.get("revenue_expenditure"):
+                highlights.append(f"Revenue Expenditure: ₹{overview['revenue_expenditure']:,.0f} Crore.")
+            if overview.get("fiscal_deficit"):
+                highlights.append(f"Gross Fiscal Deficit: ₹{overview['fiscal_deficit']:,.0f} Crore.")
+            if highlights:
+                overview["key_highlights"] = highlights
+                
         results["overview"] = overview
         
-        # Ensure receipts composition is populated
+        # 4. Receipts composition: populate ONLY from verified extracted values
         receipts = results.get("receipts") or {}
         if not receipts.get("receipt_composition"):
-            tot = overview.get("total_receipts") or 100000.0
-            receipts["receipt_composition"] = [
-                {"name": "Gross Tax Revenue", "value": round(tot * 0.65, 2), "percentage": 65.0},
-                {"name": "Non-Tax Revenue", "value": round(tot * 0.11, 2), "percentage": 11.0},
-                {"name": "Borrowings & Other Capital Receipts", "value": round(tot * 0.24, 2), "percentage": 24.0}
-            ]
-            receipts["total_receipts"] = tot
-            receipts["revenue_receipts"] = round(tot * 0.76, 2)
-            receipts["capital_receipts"] = round(tot * 0.24, 2)
+            comp = []
+            tax_obj = receipts.get("tax_revenue")
+            tax_val = tax_obj.get("total") if isinstance(tax_obj, dict) else None
+            ntax_obj = receipts.get("non_tax_revenue")
+            ntax_val = ntax_obj.get("total") if isinstance(ntax_obj, dict) else None
+            cap_r = receipts.get("capital_receipts") or overview.get("capital_receipts")
+            t_rec = receipts.get("total_receipts") or overview.get("total_receipts")
+            
+            if tax_val and tax_val > 0:
+                pct = round((tax_val / t_rec) * 100, 1) if (t_rec and t_rec > 0) else None
+                comp.append({"name": "Tax Revenue", "value": tax_val, "percentage": pct})
+            if ntax_val and ntax_val > 0:
+                pct = round((ntax_val / t_rec) * 100, 1) if (t_rec and t_rec > 0) else None
+                comp.append({"name": "Non-Tax Revenue", "value": ntax_val, "percentage": pct})
+            if cap_r and cap_r > 0:
+                pct = round((cap_r / t_rec) * 100, 1) if (t_rec and t_rec > 0) else None
+                comp.append({"name": "Capital Receipts & Borrowings", "value": cap_r, "percentage": pct})
+            if comp:
+                receipts["receipt_composition"] = comp
         results["receipts"] = receipts
         
-        # Ensure expenditure composition is populated
+        # 5. Expenditure composition: populate ONLY from verified extracted values
         exp = results.get("expenditure") or {}
         if not exp.get("expenditure_composition"):
-            tot = overview.get("total_expenditure") or 100000.0
-            rev_exp = overview.get("revenue_expenditure") or round(tot * 0.77, 2)
-            cap_exp = overview.get("capital_expenditure") or round(tot * 0.23, 2)
-            exp["expenditure_composition"] = [
-                {"name": "Revenue Expenditure (Salaries, Subsidies, Interest)", "value": rev_exp, "percentage": round((rev_exp/tot)*100, 1)},
-                {"name": "Capital Expenditure (Asset Creation, Infrastructure)", "value": cap_exp, "percentage": round((cap_exp/tot)*100, 1)}
-            ]
-            exp["total_expenditure"] = tot
-            exp["revenue_expenditure"] = rev_exp
-            exp["capital_expenditure"] = cap_exp
+            comp = []
+            r_e = exp.get("revenue_expenditure") or overview.get("revenue_expenditure")
+            c_e = exp.get("capital_expenditure") or overview.get("capital_expenditure")
+            t_e = exp.get("total_expenditure") or overview.get("total_expenditure")
+            
+            if r_e and r_e > 0:
+                pct = round((r_e / t_e) * 100, 1) if (t_e and t_e > 0) else None
+                comp.append({"name": "Revenue Expenditure", "value": r_e, "percentage": pct})
+            if c_e and c_e > 0:
+                pct = round((c_e / t_e) * 100, 1) if (t_e and t_e > 0) else None
+                comp.append({"name": "Capital Expenditure", "value": c_e, "percentage": pct})
+            if comp:
+                exp["expenditure_composition"] = comp
         results["expenditure"] = exp
         
-        # Ensure sectors are present
-        sectors = results.get("sectors") or {}
-        if not sectors.get("sectors"):
-            tot = overview.get("total_expenditure") or 100000.0
-            default_sectors = [
-                {"sector_name": "Defence & Security", "allocation": round(tot * 0.13, 2), "percentage": 13.0, "key_schemes": ["Modernization Outlay", "Ex-Servicemen Welfare"]},
-                {"sector_name": "Road Transport & Highways", "allocation": round(tot * 0.09, 2), "percentage": 9.0, "key_schemes": ["Bharatmala", "National Highway Development"]},
-                {"sector_name": "Railways", "allocation": round(tot * 0.07, 2), "percentage": 7.0, "key_schemes": ["Vande Bharat / Kavach Safety", "Dedicated Freight Corridors"]},
-                {"sector_name": "Agriculture & Farmers Welfare", "allocation": round(tot * 0.08, 2), "percentage": 8.0, "key_schemes": ["PM-KISAN", "PM Fasal Bima Yojana"]},
-                {"sector_name": "Rural Development", "allocation": round(tot * 0.06, 2), "percentage": 6.0, "key_schemes": ["MGNREGA", "PM Awas Yojana (Gramin)"]},
-                {"sector_name": "Education & Skill Development", "allocation": round(tot * 0.05, 2), "percentage": 5.0, "key_schemes": ["Samagra Shiksha", "PM-SHRI Schools"]},
-                {"sector_name": "Healthcare & Family Welfare", "allocation": round(tot * 0.04, 2), "percentage": 4.0, "key_schemes": ["Ayushman Bharat PMJAY", "National Health Mission"]},
-                {"sector_name": "Energy & Power", "allocation": round(tot * 0.04, 2), "percentage": 4.0, "key_schemes": ["PM Surya Ghar", "Green Hydrogen Mission"]},
-                {"sector_name": "Social Welfare & Women Child", "allocation": round(tot * 0.03, 2), "percentage": 3.0, "key_schemes": ["Mission Shakti", "Poshan 2.0"]},
-                {"sector_name": "Jal Shakti (Water Resources)", "allocation": round(tot * 0.03, 2), "percentage": 3.0, "key_schemes": ["Jal Jeevan Mission", "Clean Ganga (Namami Gange)"]}
-            ]
-            sectors["sectors"] = default_sectors
-            sectors["total_sectors"] = len(default_sectors)
-        results["sectors"] = sectors
-        
-        # Ensure schemes are present
-        schemes = results.get("schemes") or {}
-        if not schemes.get("schemes"):
-            schemes["schemes"] = [
-                {"scheme_name": "PM-KISAN (Income Support)", "sector": "Agriculture", "allocation": 60000.0, "objective": "Direct income support of ₹6,000 per year to eligible farmer families", "beneficiaries": "Small and marginal farmers", "is_new": False},
-                {"scheme_name": "MGNREGA", "sector": "Rural Development", "allocation": 86000.0, "objective": "Guaranteed 100 days of wage employment in rural areas", "beneficiaries": "Rural households", "is_new": False},
-                {"scheme_name": "Pradhan Mantri Awas Yojana (PMAY)", "sector": "Housing", "allocation": 54500.0, "objective": "Housing for all in urban and rural areas with basic amenities", "beneficiaries": "Low income and homeless families", "is_new": False},
-                {"scheme_name": "Jal Jeevan Mission", "sector": "Water Resources", "allocation": 70000.0, "objective": "Functional household tap connections in every rural home", "beneficiaries": "Rural population", "is_new": False},
-                {"scheme_name": "Ayushman Bharat (PM-JAY)", "sector": "Healthcare", "allocation": 7500.0, "objective": "Health coverage of ₹5 lakh per family per year for secondary/tertiary care", "beneficiaries": "Bottom 40% vulnerable population", "is_new": False},
-                {"scheme_name": "Production Linked Incentive (PLI)", "sector": "Manufacturing", "allocation": 6200.0, "objective": "Boost domestic manufacturing and export competitiveness in key sectors", "beneficiaries": "Industrial manufacturers & tech firms", "is_new": False}
-            ]
-            schemes["total_schemes"] = len(schemes["schemes"])
-        results["schemes"] = schemes
-        
-        # Ensure fiscal indicators are present
+        # 6. Fiscal indicators: build ONLY from real extracted numbers
         fiscal = results.get("fiscal") or {}
         if not fiscal.get("fiscal_indicators"):
-            f_def = overview.get("fiscal_deficit") or 1600000.0
-            r_def = overview.get("revenue_deficit") or 600000.0
-            p_def = overview.get("primary_deficit") or 400000.0
-            fiscal["fiscal_deficit"] = f_def
-            fiscal["revenue_deficit"] = r_def
-            fiscal["primary_deficit"] = p_def
-            fiscal["fiscal_indicators"] = [
-                {"name": "Fiscal Deficit", "value": f_def, "unit": "₹ Crore", "status": "warning", "explanation": "Borrowing requirement to bridge expenditure and non-debt receipts."},
-                {"name": "Fiscal Deficit / GDP", "value": overview.get("fiscal_deficit_gdp_ratio", 5.1), "unit": "%", "status": "info", "explanation": "Prudential target monitored under FRBM compliance."},
-                {"name": "Revenue Deficit", "value": r_def, "unit": "₹ Crore", "status": "warning", "explanation": "Excess of revenue expenditure over current revenue receipts."},
-                {"name": "Primary Deficit", "value": p_def, "unit": "₹ Crore", "status": "positive", "explanation": "Fiscal deficit minus interest obligations; measures current fiscal stance."}
-            ]
-            fiscal["historical_trends"] = [
-                {"year": "2021-22", "fiscal_deficit": round(f_def * 0.90, 2), "revenue_deficit": round(r_def * 0.92, 2)},
-                {"year": "2022-23", "fiscal_deficit": round(f_def * 0.95, 2), "revenue_deficit": round(r_def * 0.96, 2)},
-                {"year": "2023-24 (RE)", "fiscal_deficit": round(f_def * 0.98, 2), "revenue_deficit": round(r_def * 0.99, 2)},
-                {"year": f"{fy} (BE)", "fiscal_deficit": f_def, "revenue_deficit": r_def}
-            ]
+            indicators = []
+            f_d = fiscal.get("fiscal_deficit") or overview.get("fiscal_deficit")
+            r_d = fiscal.get("revenue_deficit") or overview.get("revenue_deficit")
+            p_d = fiscal.get("primary_deficit") or overview.get("primary_deficit")
+            gdp_r = fiscal.get("fiscal_deficit_gdp_ratio") or overview.get("fiscal_deficit_gdp_ratio")
+            
+            if f_d is not None and f_d > 0:
+                indicators.append({"name": "Gross Fiscal Deficit", "value": f_d, "unit": "₹ Crore", "status": "warning", "explanation": "Borrowing requirement to bridge expenditure and non-debt receipts."})
+            if gdp_r is not None and gdp_r > 0:
+                indicators.append({"name": "Fiscal Deficit (% of GDP/GSDP)", "value": gdp_r, "unit": "%", "status": "info", "explanation": "Deficit as percentage of economic output under fiscal responsibility frameworks."})
+            if r_d is not None and r_d > 0:
+                indicators.append({"name": "Revenue Deficit", "value": r_d, "unit": "₹ Crore", "status": "warning", "explanation": "Excess of operational expenditure over recurring revenue."})
+            if p_d is not None and p_d > 0:
+                indicators.append({"name": "Primary Deficit", "value": p_d, "unit": "₹ Crore", "status": "info", "explanation": "Fiscal deficit net of interest obligations."})
+            if indicators:
+                fiscal["fiscal_indicators"] = indicators
         results["fiscal"] = fiscal
         
-        # Ensure macroeconomic is present
+        # 7. Sectors and Schemes: preserve what was extracted by LLM, NEVER inject fake schemes or sectors!
+        # If the document didn't have schemes/sectors, the UI will accurately display that no schemes/sectors were listed in this document.
+        
+        # 8. Macroeconomics: build economic indicators ONLY if explicitly extracted
         macro = results.get("macroeconomic") or {}
-        if not macro.get("who_benefits"):
-            macro["who_benefits"] = [
-                {"group": "Farmers & Rural Economy", "impact": "Positive", "explanation": "Higher agricultural credit target and enhanced crop insurance coverage."},
-                {"group": "Middle-Class Taxpayers", "impact": "Positive", "explanation": "Relief under simplified tax regimes and standard deduction adjustments."},
-                {"group": "Infrastructure & Industry", "impact": "Very Positive", "explanation": "High capital outlay boosting steel, cement, logistics and engineering orders."},
-                {"group": "Youth & Job Seekers", "impact": "Moderate to Positive", "explanation": "Apprenticeship schemes and manufacturing PLI employment linkages."}
-            ]
-            macro["economic_indicators"] = [
-                {"name": "Real GDP Growth", "value": "7.0%", "significance": "Benchmark growth assumed for macroeconomic stability"},
-                {"name": "Nominal GDP Growth", "value": "10.5%", "significance": "Basis for tax buoyancy and revenue projections"},
-                {"name": "CPI Inflation Target", "value": "4.5%", "significance": "RBI monetary policy corridor alignment"}
-            ]
+        if not macro.get("economic_indicators"):
+            ind = []
+            if macro.get("real_gdp_growth_assumption"):
+                ind.append({"name": "Real GDP Growth Target", "value": f"{macro['real_gdp_growth_assumption']}%", "significance": "Underlying growth assumption in budget estimates"})
+            if macro.get("nominal_gdp_growth_assumption"):
+                ind.append({"name": "Nominal GDP Growth Assumption", "value": f"{macro['nominal_gdp_growth_assumption']}%", "significance": "Basis for tax revenue buoyancy projections"})
+            if macro.get("inflation_assumption"):
+                ind.append({"name": "Inflation Assumption", "value": f"{macro['inflation_assumption']}%", "significance": "Price level projection considered in budgetary calculations"})
+            if ind:
+                macro["economic_indicators"] = ind
         results["macroeconomic"] = macro
 

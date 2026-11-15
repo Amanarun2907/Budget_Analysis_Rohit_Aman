@@ -31,24 +31,21 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
   const fiscalDeficit = fiscal.fiscal_deficit || overview.fiscal_deficit || 0;
   const revenueDeficit = fiscal.revenue_deficit || overview.revenue_deficit || 0;
   const primaryDeficit = fiscal.primary_deficit || overview.primary_deficit || 0;
-  const fiscalGdpRatio = fiscal.fiscal_deficit_gdp_ratio || overview.fiscal_deficit_gdp_ratio || 5.1;
+  const fiscalGdpRatio = fiscal.fiscal_deficit_gdp_ratio ?? overview.fiscal_deficit_gdp_ratio ?? null;
 
-  // Trend Data for Line Chart
-  const trendData = fiscal.historical_trends && fiscal.historical_trends.length > 0
+  // Trend Data for Line Chart (only display if historical trends were extracted from document)
+  const trendData = (fiscal.historical_trends && fiscal.historical_trends.length > 0)
     ? fiscal.historical_trends
-    : [
-        { year: '2021-22', fiscal_deficit: Math.round(fiscalDeficit * 0.92), revenue_deficit: Math.round(revenueDeficit * 0.95) },
-        { year: '2022-23', fiscal_deficit: Math.round(fiscalDeficit * 0.95), revenue_deficit: Math.round(revenueDeficit * 0.96) },
-        { year: '2023-24 (RE)', fiscal_deficit: Math.round(fiscalDeficit * 0.98), revenue_deficit: Math.round(revenueDeficit * 0.99) },
-        { year: `${overview.financial_year || '2024-25'} (BE)`, fiscal_deficit: fiscalDeficit, revenue_deficit: revenueDeficit },
-      ];
+    : [];
 
-  const indicators = fiscal.fiscal_indicators || [
-    { name: 'Gross Fiscal Deficit', value: fiscalDeficit, unit: '₹ Crore', status: 'warning', explanation: 'Total borrowing required to finance the gap between expenditure and non-debt receipts.' },
-    { name: 'Fiscal Deficit (% of GDP/GSDP)', value: fiscalGdpRatio, unit: '%', status: 'info', explanation: 'Statutory prudential target under FRBM Act.' },
-    { name: 'Revenue Deficit', value: revenueDeficit, unit: '₹ Crore', status: 'warning', explanation: 'Excess of recurring operational expenditure over current revenue receipts.' },
-    { name: 'Primary Deficit', value: primaryDeficit, unit: '₹ Crore', status: 'info', explanation: 'Fiscal Deficit minus Interest Payments; measures current year fiscal stance.' },
-  ];
+  const indicators = (fiscal.fiscal_indicators && fiscal.fiscal_indicators.length > 0)
+    ? fiscal.fiscal_indicators
+    : [
+        ...(fiscalDeficit > 0 ? [{ name: 'Gross Fiscal Deficit', value: fiscalDeficit, unit: '₹ Crore', status: 'warning', explanation: 'Total borrowing required to finance the gap between expenditure and non-debt receipts.' }] : []),
+        ...(fiscalGdpRatio !== null ? [{ name: 'Fiscal Deficit (% of GDP/GSDP)', value: fiscalGdpRatio, unit: '%', status: 'info', explanation: 'Statutory prudential target under FRBM Act.' }] : []),
+        ...(revenueDeficit > 0 ? [{ name: 'Revenue Deficit', value: revenueDeficit, unit: '₹ Crore', status: 'warning', explanation: 'Excess of recurring operational expenditure over current revenue receipts.' }] : []),
+        ...(primaryDeficit > 0 ? [{ name: 'Primary Deficit', value: primaryDeficit, unit: '₹ Crore', status: 'info', explanation: 'Fiscal Deficit minus Interest Payments; measures current year fiscal stance.' }] : []),
+      ];
 
   return (
     <div className="space-y-6">
@@ -67,7 +64,7 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
             ₹{fiscalDeficit ? fiscalDeficit.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
           </div>
           <div className="mt-1 text-xs text-amber-400 font-semibold">
-            {fiscalGdpRatio}% of GDP/GSDP
+            {fiscalGdpRatio !== null ? `${fiscalGdpRatio}% of GDP/GSDP` : 'Targeted Deficit Trajectory'}
           </div>
         </div>
 
@@ -127,20 +124,26 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
         <p className="text-xs text-slate-400 mb-4">Trajectory of Fiscal Deficit and Revenue Deficit over Financial Years</p>
 
         <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="year" stroke="#64748b" fontSize={11} />
-              <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
-              <Tooltip
-                formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
-                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-              />
-              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="fiscal_deficit" name="Fiscal Deficit" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="revenue_deficit" name="Revenue Deficit" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          {trendData.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={trendData} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="year" stroke="#64748b" fontSize={11} />
+                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
+                <Tooltip
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
+                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                <Line type="monotone" dataKey="fiscal_deficit" name="Fiscal Deficit" stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="revenue_deficit" name="Revenue Deficit" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-xs text-slate-500">
+              Multi-year historical deficit trend not specified in uploaded document
+            </div>
+          )}
         </div>
       </div>
 

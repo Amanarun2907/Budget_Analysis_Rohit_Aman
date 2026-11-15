@@ -44,32 +44,23 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
   const revenueDef = overview.revenue_deficit || data.revenue_deficit || 0;
   const capExp = overview.capital_expenditure || expenditure.capital_expenditure || 0;
   const revExp = overview.revenue_expenditure || expenditure.revenue_expenditure || 0;
-  const deficitGdp = overview.fiscal_deficit_gdp_ratio || 5.1;
+  const deficitGdp = overview.fiscal_deficit_gdp_ratio ?? null;
 
-  // Comparison Chart Data
+  // Comparison Chart Data — only include rows where both Receipts and Expenditure are known
+  const revReceipts = overview.revenue_receipts || receipts.revenue_receipts || null;
+  const capReceipts = overview.capital_receipts || receipts.capital_receipts || null;
+
   const compData = [
-    {
-      name: 'Budget Outlay',
-      Receipts: totalRec,
-      Expenditure: totalExp,
-    },
-    {
-      name: 'Revenue Account',
-      Receipts: overview.revenue_receipts || receipts.revenue_receipts || (totalRec * 0.75),
-      Expenditure: revExp,
-    },
-    {
-      name: 'Capital Account',
-      Receipts: overview.capital_receipts || receipts.capital_receipts || (totalRec * 0.25),
-      Expenditure: capExp,
-    },
+    ...(totalRec || totalExp ? [{ name: 'Total Budget', Receipts: totalRec || 0, Expenditure: totalExp || 0 }] : []),
+    ...(revReceipts !== null || revExp ? [{ name: 'Revenue Account', Receipts: revReceipts || 0, Expenditure: revExp || 0 }] : []),
+    ...(capReceipts !== null || capExp ? [{ name: 'Capital Account', Receipts: capReceipts || 0, Expenditure: capExp || 0 }] : []),
   ];
 
-  // Capital vs Revenue Outlay Pie Data
-  const outlayPieData = [
-    { name: 'Revenue Expenditure (Recurring/Salaries/Subsidies)', value: revExp || (totalExp * 0.77) },
-    { name: 'Capital Expenditure (Asset Creation/Infrastructure)', value: capExp || (totalExp * 0.23) },
-  ];
+  // Capital vs Revenue Outlay Pie Data — only show if BOTH values extracted
+  const outlayPieData = revExp && capExp ? [
+    { name: 'Revenue Expenditure (Recurring/Salaries/Subsidies)', value: revExp },
+    { name: 'Capital Expenditure (Asset Creation/Infrastructure)', value: capExp },
+  ] : [];
 
   return (
     <div className="space-y-6">
@@ -123,7 +114,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
             <Percent className="h-3.5 w-3.5" />
-            <span>{deficitGdp}% of GDP/GSDP</span>
+            <span>{deficitGdp !== null ? `${deficitGdp}% of GDP/GSDP` : 'Extracted from document'}</span>
           </div>
         </div>
 
@@ -179,19 +170,25 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={compData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
-                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
-                <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} />
-                <Bar dataKey="Receipts" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Expenditure" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {compData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={compData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
+                  <YAxis stroke="#64748b" fontSize={11} tickFormatter={(v) => `₹${(v/1000).toFixed(0)}k Cr`} />
+                  <Tooltip
+                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
+                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} />
+                  <Bar dataKey="Receipts" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Expenditure" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-slate-500">
+                Receipts vs Expenditure figures not found in uploaded document
+              </div>
+            )}
           </div>
         </div>
 
@@ -207,6 +204,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="h-72 w-full">
+            {outlayPieData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -229,6 +227,11 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
                 <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-500 text-xs">
+                Revenue/Capital expenditure breakdown not extracted from this document
+              </div>
+            )}
           </div>
         </div>
 

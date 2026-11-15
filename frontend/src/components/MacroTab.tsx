@@ -20,21 +20,26 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
   const macro = data.analysis?.macroeconomic || {};
   const overview = data.analysis?.overview || {};
 
-  const whoBenefits = macro.who_benefits || [
-    { group: 'Farmers & Agricultural Sector', impact: 'Positive', explanation: 'Higher agricultural credit targets, MSP enhancement, crop insurance outlays, and irrigation funding.' },
-    { group: 'Middle Class & Salaried Taxpayers', impact: 'Positive', explanation: 'Direct tax rationalization, revised slab rates, standard deduction increases, and pension incentives.' },
-    { group: 'MSMEs & Industrial Manufacturers', impact: 'Positive', explanation: 'Credit guarantee scheme expansion, customs duty rationalization for inputs, and PLI incentives.' },
-    { group: 'Youth, Students & Job Seekers', impact: 'Positive', explanation: 'Apprenticeship incentives, education loan support, skilling centers of excellence, and startup angel tax abolition.' },
-    { group: 'Women & Child Development', impact: 'Positive', explanation: 'Higher gender-budget allocations, working women hostels, and Mission Shakti support.' },
-    { group: 'Senior Citizens', impact: 'Neutral to Positive', explanation: 'Tax exemptions on interest income, healthcare coverage under Ayushman Bharat extension.' },
-  ];
+  const whoBenefits: Array<{ group: string; impact: string; explanation: string }> = 
+    (macro.who_benefits && macro.who_benefits.length > 0)
+      ? macro.who_benefits
+      : [];
 
-  const indicators = macro.economic_indicators || [
-    { name: 'Nominal GDP Growth Assumption', value: '10.5%', significance: 'Foundation for tax revenue buoyancy projections' },
-    { name: 'Real GDP Growth Target', value: '7.0%', significance: 'Sustained macroeconomic expansion' },
-    { name: 'Capital Expenditure Multiplier', value: '2.5x - 3.0x', significance: 'Crowds in private sector investment and creates infrastructure jobs' },
-    { name: 'CPI Inflation Alignment', value: '4.5%', significance: 'Aligned with RBI monetary policy framework target' },
-  ];
+  const risks: string[] = Array.isArray(macro.risks) && macro.risks.length > 0
+    ? macro.risks
+    : [];
+
+  const opportunities: string[] = Array.isArray(macro.opportunities) && macro.opportunities.length > 0
+    ? macro.opportunities
+    : [];
+
+  const nominalGdpGrowth = macro.nominal_gdp_growth_assumption 
+    ? `${macro.nominal_gdp_growth_assumption}%` 
+    : (macro.real_gdp_growth_assumption ? `${macro.real_gdp_growth_assumption}% (Real)` : 'Not Specified');
+
+  const fiscalDeficitRatio = overview.fiscal_deficit_gdp_ratio 
+    ? `${overview.fiscal_deficit_gdp_ratio}%` 
+    : (macro.fiscal_deficit_gdp_ratio ? `${macro.fiscal_deficit_gdp_ratio}%` : 'Not Specified');
 
   return (
     <div className="space-y-6">
@@ -44,31 +49,31 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
         
         <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Nominal GDP Growth</span>
+            <span className="text-xs font-medium text-slate-400">GDP Growth Assumption</span>
             <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
               <TrendingUp className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            10.5%
+            {nominalGdpGrowth}
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            Baseline growth assumption
+            {macro.nominal_gdp_growth_assumption ? 'Baseline nominal projection' : 'Extracted from document'}
           </div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 shadow-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-400">Capex Multiplier Effect</span>
+            <span className="text-xs font-medium text-slate-400">Inflation Assumption</span>
             <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
               <Activity className="h-4 w-4" />
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            2.8x - 3.0x
+            {macro.inflation_assumption ? `${macro.inflation_assumption}%` : 'Contained in Outlook'}
           </div>
           <div className="mt-1 text-xs text-emerald-400 font-medium">
-            Long-term economic output boost
+            Price level assumption
           </div>
         </div>
 
@@ -80,10 +85,10 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            {overview.fiscal_deficit_gdp_ratio || 5.1}%
+            {fiscalDeficitRatio}
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            Targeted glide path
+            % of GDP/GSDP
           </div>
         </div>
 
@@ -95,93 +100,89 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-xl font-bold text-white">
-            Pro-Growth
+            {overview.capital_expenditure && overview.capital_expenditure > 0 ? 'Capex Focus' : 'Fiscal Stance'}
           </div>
           <div className="mt-1 text-xs text-purple-400">
-            Capex-led consolidation
+            {overview.government_level === 'state' ? 'State Public Finance' : 'Macroeconomic Trajectory'}
           </div>
         </div>
 
       </div>
 
       {/* Who Benefits Demographic Impact Grid */}
-      <div className="p-5 rounded-xl bg-slate-900 border border-slate-800">
-        <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
-          <Users className="h-4 w-4 text-blue-400" />
-          Who Benefits: Segmental Economic Impact Matrix
-        </h4>
-        <p className="text-xs text-slate-400 mb-4">
-          Analysis of how budgetary measures, tax policies, and allocations affect key demographic cohorts
-        </p>
+      {whoBenefits.length > 0 && (
+        <div className="p-5 rounded-xl bg-slate-900 border border-slate-800">
+          <h4 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+            <Users className="h-4 w-4 text-blue-400" />
+            Who Benefits: Segmental Economic Impact Matrix
+          </h4>
+          <p className="text-xs text-slate-400 mb-4">
+            Analysis of how budgetary measures, tax policies, and allocations affect key demographic cohorts
+          </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {whoBenefits.map((item, idx) => (
-            <div
-              key={idx}
-              className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-white">{item.group}</span>
-                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  {item.impact}
-                </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {whoBenefits.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">{item.group}</span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {item.impact}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  {item.explanation}
+                </p>
               </div>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                {item.explanation}
-              </p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Risks and Opportunities */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
-        {/* Risks */}
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
-          <h4 className="text-xs font-bold text-white flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400" />
-            Macroeconomic Risks & Uncertainties
-          </h4>
-          <ul className="space-y-1.5 text-xs text-slate-300">
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-              <span>Geopolitical volatility and global crude oil supply disruptions impacting import bill and inflation.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-              <span>Rural demand sensitivity to weather events and spatial monsoon distribution.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-              <span>Global interest rate divergence and capital flow volatility affecting exchange rates.</span>
-            </li>
-          </ul>
-        </div>
+      {(risks.length > 0 || opportunities.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          {/* Risks */}
+          {risks.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                Macroeconomic Risks &amp; Uncertainties
+              </h4>
+              <ul className="space-y-1.5 text-xs text-slate-300">
+                {risks.map((risk, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                    <span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-        {/* Opportunities */}
-        <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
-          <h4 className="text-xs font-bold text-white flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-            Structural Growth Catalysts & Opportunities
-          </h4>
-          <ul className="space-y-1.5 text-xs text-slate-300">
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-              <span>Enhanced logistics efficiency through Dedicated Freight Corridors and Bharatmala reducing cost of doing business.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-              <span>Global supply chain integration and manufacturing export surge powered by PLI schemes.</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-              <span>Green energy transition and PM Surya Ghar accelerating clean energy self-reliance.</span>
-            </li>
-          </ul>
-        </div>
+          {/* Opportunities */}
+          {opportunities.length > 0 && (
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
+              <h4 className="text-xs font-bold text-white flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                Structural Growth Catalysts &amp; Opportunities
+              </h4>
+              <ul className="space-y-1.5 text-xs text-slate-300">
+                {opportunities.map((opp, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                    <span>{opp}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-      </div>
+        </div>
+      )}
 
       {/* Analytical Narrative */}
       <div className="p-5 rounded-xl bg-slate-900 border border-slate-800">

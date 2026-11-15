@@ -153,7 +153,9 @@ export const SchemesTab: React.FC<SchemesTabProps> = ({ data }) => {
 
         {filtered.length === 0 && (
           <div className="col-span-full p-12 text-center text-sm text-slate-500 border border-slate-800 rounded-xl bg-slate-900">
-            No schemes found matching the filters
+            {schemesList.length === 0 
+              ? "No itemized government schemes or flagship programmes were identified in this uploaded document. Review the Overview and Expenditure tabs for aggregate allocations." 
+              : "No schemes found matching the current search and filter criteria."}
           </div>
         )}
       </div>

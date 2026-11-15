@@ -173,6 +173,9 @@ export interface CompleteAnalysis {
     macroeconomic?: {
       nominal_gdp?: number;
       real_gdp_growth_assumption?: number;
+      nominal_gdp_growth_assumption?: number;
+      inflation_assumption?: number;
+      fiscal_deficit_gdp_ratio?: number;
       tax_to_gdp_ratio?: number;
       capex_to_gdp_ratio?: number;
       growth_impact?: string;
