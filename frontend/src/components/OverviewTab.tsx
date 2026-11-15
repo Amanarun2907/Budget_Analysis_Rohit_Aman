@@ -178,7 +178,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
               <p className="text-xs text-slate-400 mt-0.5">Amounts in ₹ Crore</p>
             </div>
           </div>
-          <div className="h-64 w-full">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={compData} margin={{ top: 10, right: 10, left: 0, bottom: 5 }}>
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
@@ -187,7 +187,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
                 />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '15px' }} />
                 <Bar dataKey="Receipts" fill="#10b981" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Expenditure" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -206,15 +206,15 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
               <p className="text-xs text-slate-400 mt-0.5">Asset Creation vs Day-to-Day Maintenance</p>
             </div>
           </div>
-          <div className="h-64 w-full">
+          <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={outlayPieData}
                   cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
+                  cy="45%"
+                  innerRadius={55}
+                  outerRadius={80}
                   paddingAngle={5}
                   dataKey="value"
                 >
@@ -226,7 +226,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
                   formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')} Cr`]}
                   contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }}
                 />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '12px' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
