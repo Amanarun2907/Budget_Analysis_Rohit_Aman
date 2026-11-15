@@ -86,7 +86,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{totalReceipts ? totalReceipts.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {totalReceipts ? `₹${totalReceipts.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{totalReceipts ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-slate-400">
             Total non-debt & debt resources
@@ -101,7 +101,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{revenueReceipts ? revenueReceipts.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {revenueReceipts ? `₹${revenueReceipts.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{revenueReceipts ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-blue-400 font-medium">
             Tax + Non-Tax Revenues
@@ -116,7 +116,7 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{capitalReceipts ? capitalReceipts.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {capitalReceipts ? `₹${capitalReceipts.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{capitalReceipts ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-amber-400 font-medium">
             Market Loans, Disinvestment, Recoveries
@@ -202,10 +202,11 @@ export const ReceiptsTab: React.FC<ReceiptsTabProps> = ({ data }) => {
           Revenue Mobilization Analysis & Fiscal Dependency
         </h4>
         
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-          {receipts.analysis_text ||
-            `The government's receipt architecture demonstrates steady tax buoyancy anchored by robust collections in GST and Direct Taxes (Personal Income Tax and Corporate Tax). Non-tax revenue from public enterprise dividends and user charges provides auxiliary support, while capital borrowings are calibrated to bridge the fiscal deficit without crowding out private sector credit.`}
-        </p>
+        {receipts.analysis_text ? (
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{receipts.analysis_text}</p>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Detailed revenue mobilization narrative was not extracted from this document.</p>
+        )}
 
         {receipts.dependency_observation && (
           <div className="p-3.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 flex items-start gap-2.5">

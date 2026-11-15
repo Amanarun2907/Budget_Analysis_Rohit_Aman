@@ -57,7 +57,7 @@ export const ExpenditureTab: React.FC<ExpenditureTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{totalExp ? totalExp.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {totalExp ? `₹${totalExp.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{totalExp ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-slate-400">
             Combined Revenue + Capital Outlay
@@ -72,7 +72,7 @@ export const ExpenditureTab: React.FC<ExpenditureTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{revExp ? revExp.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {revExp ? `₹${revExp.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{revExp ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-indigo-400 font-medium">
             {totalExp && revExp ? `${((revExp / totalExp) * 100).toFixed(1)}% of Budget (Operational & Service Commitments)` : 'Operational & Service Commitments'}
@@ -87,7 +87,7 @@ export const ExpenditureTab: React.FC<ExpenditureTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{capExp ? capExp.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {capExp ? `₹${capExp.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{capExp ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-purple-400 font-medium">
             {totalExp && capExp ? `${((capExp / totalExp) * 100).toFixed(1)}% of Budget (Productive Capex)` : 'Productive Capex'}
@@ -193,10 +193,11 @@ export const ExpenditureTab: React.FC<ExpenditureTabProps> = ({ data }) => {
           <Sparkles className="h-4 w-4 text-blue-400" />
           Expenditure Quality & Capital Investment Analysis
         </h4>
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-          {exp.analysis_text ||
-            `The expenditure profile demonstrates a deliberate shift toward capital expenditure (Capex), which delivers higher fiscal multiplier effects (estimated at 2.5x to 3.0x) compared to revenue consumption. Enhanced outlays in Railways, Highways, and Logistics create long-term productive assets while crowding-in private investment.`}
-        </p>
+        {exp.analysis_text ? (
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{exp.analysis_text}</p>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Expenditure quality analysis narrative was not extracted from this document.</p>
+        )}
       </div>
 
     </div>

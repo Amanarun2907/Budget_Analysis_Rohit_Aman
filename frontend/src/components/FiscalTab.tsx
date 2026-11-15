@@ -61,7 +61,7 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{fiscalDeficit ? fiscalDeficit.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {fiscalDeficit ? `₹${fiscalDeficit.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{fiscalDeficit ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-amber-400 font-semibold">
             {fiscalGdpRatio !== null ? `${fiscalGdpRatio}% of GDP/GSDP` : 'Targeted Deficit Trajectory'}
@@ -76,7 +76,7 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{revenueDeficit ? revenueDeficit.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {revenueDeficit ? `₹${revenueDeficit.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{revenueDeficit ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-slate-400">
             Day-to-day consumption gap
@@ -91,7 +91,7 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{primaryDeficit ? primaryDeficit.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {primaryDeficit ? `₹${primaryDeficit.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{primaryDeficit ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 text-xs text-blue-400">
             Excluding interest obligations
@@ -106,10 +106,10 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-xl font-bold text-emerald-400">
-            Consolidating
+            {fiscal.frbm_assessment || 'See Document'}
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            Glide path towards &lt;4.5% target
+            FRBM statutory compliance status
           </div>
         </div>
 
@@ -185,10 +185,11 @@ export const FiscalTab: React.FC<FiscalTabProps> = ({ data }) => {
           <Info className="h-4 w-4 text-blue-400" />
           Fiscal Consolidation & Debt Sustainability Evaluation
         </h4>
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-          {fiscal.analysis_text ||
-            `The fiscal deficit trajectory reflects committed adherence to the medium-term consolidation glide path. While maintaining record capital investment to preserve economic momentum, the government ensures that interest payments as a percentage of revenue receipts remain within manageable thresholds, maintaining debt sustainability and sovereign creditworthiness.`}
-        </p>
+        {fiscal.analysis_text ? (
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{fiscal.analysis_text}</p>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Fiscal consolidation and debt sustainability narrative was not extracted from this document.</p>
+        )}
       </div>
 
     </div>

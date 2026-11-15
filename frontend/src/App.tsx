@@ -105,31 +105,14 @@ export default function App() {
   const handleCreateSampleBudget = async () => {
     setIsLoading(true);
     try {
-      // 1. Instantly seed or retrieve pre-verified 100% accurate Union Budget 2024-25 demo
+      // Seed or retrieve pre-verified Union Budget 2024-25 demo data
       const ws = await budgetApi.seedDemoBudget();
       await loadWorkspaces();
       setCurrentWorkspace(ws);
       await loadAnalysis(ws.id);
     } catch (err: any) {
-      console.warn('Seed demo fallback to live upload pipeline:', err);
-      try {
-        const ws = await budgetApi.createWorkspace({
-          name: 'Union Budget 2024-25 (Interim & Full)',
-          government_level: 'union',
-          financial_year: '2024-25',
-          description: 'Comprehensive Economic Analysis of Union Budget of India 2024-25',
-        });
-        const sampleBlob = new Blob([
-          `GOVERNMENT OF INDIA\nUNION BUDGET 2024-2025\nTotal Receipts: 3207200 Crore\nTotal Expenditure: 4820512 Crore\nCapital Expenditure: 1111111 Crore\nGross Fiscal Deficit: 1613312 Crore`
-        ], { type: 'text/plain' });
-        const sampleFile = new File([sampleBlob], 'Union_Budget_2024_25_Summary.txt', { type: 'text/plain' });
-        await budgetApi.uploadDocuments(ws.id, [sampleFile]);
-        await budgetApi.startAnalysis(ws.id);
-        await loadWorkspaces();
-        setCurrentWorkspace(ws);
-      } catch (innerErr: any) {
-        alert(`Error initializing sample budget: ${innerErr.message}`);
-      }
+      console.warn('Seed demo failed:', err);
+      alert('Could not load the demo budget. Please upload a real budget PDF using the Upload Budget button.');
     } finally {
       setIsLoading(false);
     }

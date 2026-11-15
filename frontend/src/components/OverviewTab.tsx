@@ -77,7 +77,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{totalExp ? totalExp.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {totalExp ? `₹${totalExp.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{totalExp ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-emerald-400">
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -94,7 +94,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{totalRec ? totalRec.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {totalRec ? `₹${totalRec.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{totalRec ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400">
             <span>Revenue + Capital Receipts</span>
@@ -110,7 +110,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{fiscalDef ? fiscalDef.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {fiscalDef ? `₹${fiscalDef.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{fiscalDef ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
             <Percent className="h-3.5 w-3.5" />
@@ -127,7 +127,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
             </div>
           </div>
           <div className="mt-2 text-2xl font-extrabold text-white">
-            ₹{capExp ? capExp.toLocaleString('en-IN') : '0'} <span className="text-xs font-normal text-slate-400">Cr</span>
+            {capExp ? `₹${capExp.toLocaleString('en-IN')} ` : <span className="text-slate-500 text-base font-medium">Not specified</span>}<span className="text-xs font-normal text-slate-400">{capExp ? 'Cr' : ''}</span>
           </div>
           <div className="mt-1 flex items-center gap-1.5 text-xs text-purple-400 font-medium">
             <span>Infrastructure Multiplier</span>
@@ -151,7 +151,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({ data }) => {
         </div>
         <p className="text-sm leading-relaxed text-slate-300 font-normal">
           {overview.executive_summary ||
-            `The ${overview.government_name || 'Government'} Budget for FY ${overview.financial_year || '2024-25'} balances fiscal consolidation with growth-inducing capital investment. With an aggregate outlay of ₹${(totalExp || 0).toLocaleString('en-IN')} Crore, the budget prioritizes productive asset creation, rural demand stabilization, and strategic infrastructure while adhering to the FRBM deficit trajectory.`}
+            `Official budget documents for ${overview.government_name || 'the Government'} (FY ${overview.financial_year || 'uploaded year'}) have been processed. All key metrics, sectoral allocations, and analytical insights extracted from your document are displayed across the respective tabs. Any figure not present in the uploaded document is shown as unavailable — no data has been fabricated or estimated.`}
         </p>
       </div>
 

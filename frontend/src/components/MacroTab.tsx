@@ -58,7 +58,7 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
             {nominalGdpGrowth}
           </div>
           <div className="mt-1 text-xs text-slate-400">
-            {macro.nominal_gdp_growth_assumption ? 'Baseline nominal projection' : 'Extracted from document'}
+            {macro.nominal_gdp_growth_assumption ? 'Baseline nominal projection' : 'As specified in document'}
           </div>
         </div>
 
@@ -190,10 +190,11 @@ export const MacroTab: React.FC<MacroTabProps> = ({ data }) => {
           <Sparkles className="h-4 w-4 text-blue-400" />
           Comprehensive Macroeconomic Evaluation
         </h4>
-        <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-          {macro.analysis_text ||
-            `The macroeconomic underpinnings of this budget reflect a strategic synthesis between capital investment and fiscal consolidation. By prioritizing high-multiplier capital outlays over recurring consumption, the budget establishes conditions for crowding-in private sector investments, expanding employment opportunities, and keeping debt sustainability firmly anchored.`}
-        </p>
+        {macro.analysis_text ? (
+          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{macro.analysis_text}</p>
+        ) : (
+          <p className="text-xs text-slate-500 italic">Macroeconomic evaluation narrative was not extracted from this document.</p>
+        )}
       </div>
 
     </div>
