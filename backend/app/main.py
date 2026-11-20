@@ -38,6 +38,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(health.router, prefix="", tags=["Health"])  # Allows GET /health directly for monitoring services
 app.include_router(health.router, prefix="/api", tags=["Health"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])

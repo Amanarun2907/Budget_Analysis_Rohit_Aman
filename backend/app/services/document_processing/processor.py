@@ -321,33 +321,42 @@ class DocumentProcessor:
             props["financial_year"] = None
 
         # ── State or Union detection ──
-        # IMPORTANT: check union-level signals FIRST to avoid a Union Budget being
-        # misclassified as a state budget simply because it names a state ≥2 times
-        # (which is extremely common in Union Budget speeches covering devolution, PMGSY, etc.)
+        # Check explicit State signals first: "government of <state>", "<state> state budget", "finance department"
+        detected_state: Optional[str] = None
+        for state in self.INDIAN_STATES:
+            s_lower = state.lower()
+            # Explicit patterns indicating state budget document
+            if (
+                f"government of {s_lower}" in tl
+                or f"{s_lower} state budget" in tl
+                or f"{s_lower} budget" in tl
+                or f"state of {s_lower}" in tl
+            ):
+                detected_state = state
+                break
+
+        # If not found via direct phrases, check state frequency
+        if not detected_state:
+            for state in self.INDIAN_STATES:
+                if tl.count(state.lower()) >= 2:
+                    # Make sure it's not a union document mentioning state programs
+                    if "union budget" not in tl and "government of india" not in tl:
+                        detected_state = state
+                        break
+
         union_signals = [
-            "union budget", "government of india", "ministry of finance",
-            "nirmala sitharaman", "consolidated fund of india",
-            "annual financial statement", "demand for grants",
-            "budget speech", "finance minister of india",
-            "central government", "union territories",
+            "union budget", "government of india", "consolidated fund of india",
             "parliament of india", "lok sabha", "rajya sabha",
         ]
         is_union_doc = any(sig in tl for sig in union_signals)
 
-        detected_state: Optional[str] = None
-        # Only scan for state names if we haven't already confirmed this is a Union document
-        if not is_union_doc:
-            for state in self.INDIAN_STATES:
-                if state.lower() in tl:
-                    # Require ≥2 occurrences to avoid false positives from passing mentions
-                    if tl.count(state.lower()) >= 2:
-                        detected_state = state
-                        break
-
-        if detected_state and not is_union_doc:
+        if detected_state and not ("union budget" in tl and "government of india" in tl and f"government of {detected_state.lower()}" not in tl):
             props["government_level"] = "state"
             props["state_name"]       = detected_state
             props["government_name"]  = f"Government of {detected_state}"
+        elif is_union_doc or "union" in tl:
+            props["government_level"] = "union"
+            props["government_name"]  = "Government of India"
         else:
             props["government_level"] = "union"
             props["government_name"]  = "Government of India"
