@@ -46,10 +46,12 @@ class BudgetDocument(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     workspace_id = Column(String, ForeignKey("budget_workspaces.id"), nullable=False)
     filename = Column(String, nullable=False)
+    stored_filename = Column(String)          # alias for filename; kept for compatibility
     original_filename = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
-    file_size = Column(Integer)
-    file_type = Column(String)  # pdf, docx, xlsx, etc.
+    file_size = Column(Integer)               # bytes
+    file_size_bytes = Column(Integer)         # alias; kept for compatibility
+    file_type = Column(String)                # pdf, docx, xlsx, etc.
     document_type = Column(String, default=DocumentType.OTHER.value)
     page_count = Column(Integer)
     processing_status = Column(String, default=ProcessingStatus.UPLOADED.value)

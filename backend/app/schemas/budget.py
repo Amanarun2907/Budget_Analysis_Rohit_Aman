@@ -43,13 +43,13 @@ class DocumentResponse(BaseModel):
     workspace_id: str
     filename: str
     original_filename: str
-    file_type: Optional[str]
-    document_type: Optional[str]
-    page_count: Optional[int]
-    file_size: Optional[int]
+    file_type: Optional[str] = None
+    document_type: Optional[str] = None
+    page_count: Optional[int] = None
+    file_size: Optional[int] = None
     processing_status: str
     processing_progress: float
-    processing_error: Optional[str]
+    processing_error: Optional[str] = None
     created_at: datetime
     
     class Config:
