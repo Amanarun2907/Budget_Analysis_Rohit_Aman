@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     CHUNK_SIZE: int = 1000
     CHUNK_OVERLAP: int = 200
     
-    LLM_MODEL: str = "llama-3.1-8b-instant"
+    LLM_MODEL: str = "qwen/qwen3.8-27b"
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 8000
     EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"

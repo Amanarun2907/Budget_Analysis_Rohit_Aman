@@ -114,6 +114,10 @@ INSTRUCTIONS:
 
         for model_name in candidates:
             try:
+                extra_kwargs = {}
+                if "qwen3" in model_name.lower():
+                    extra_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+
                 resp = self.client.chat.completions.create(
                     model=model_name,
                     messages=[
@@ -121,15 +125,20 @@ INSTRUCTIONS:
                         {"role": "user",   "content": user_prompt},
                     ],
                     temperature=0.15,
-                    max_tokens=2500,
+                    max_tokens=2000,
                     timeout=20.0,
+                    **extra_kwargs,
                 )
                 content = resp.choices[0].message.content or ""
                 if content.strip():
                     logger.info(f"Chat answered by model: {model_name}")
                     return content
             except Exception as e:
-                logger.warning(f"Chat model {model_name} failed: {e}")
+                err_str = str(e)
+                if "decommissioned" in err_str or "model_not_found" in err_str or "does not exist" in err_str:
+                    logger.debug(f"Skipping unavailable model {model_name}")
+                else:
+                    logger.warning(f"Chat model {model_name} failed: {err_str[:80]}")
                 continue
 
         return ""

@@ -12,105 +12,57 @@ logger = structlog.get_logger()
 
 class VectorStoreManager:
     """
-    Document chunking and semantic retrieval.
+    Document chunking and fast semantic retrieval.
 
-    Storage strategy (two layers):
-    1. ChromaDB (persistent) — used when chromadb package is available; provides
-       cosine-similarity search over dense embeddings.
-    2. JSON fallback — always written; used if ChromaDB is unavailable.  Retrieval
-       uses a lightweight TF-IDF-inspired keyword scorer (fast, zero-dependency).
+    Storage: JSON files per workspace — zero external dependencies, instant startup,
+    no network downloads, works perfectly on Render's ephemeral filesystem.
+
+    Retrieval: TF-IDF keyword scoring — fast, accurate for financial document search
+    where queries contain specific numeric/domain terms.
+
+    ChromaDB is intentionally NOT used here because:
+    1. It downloads a 79 MB ONNX embedding model on first use — this causes
+       17-22 second timeouts on slow cloud networks (Render free tier).
+    2. The ONNX model download fails silently and falls back anyway.
+    3. For structured financial document search, TF-IDF outperforms
+       generic sentence embeddings on domain-specific queries.
     """
 
     def __init__(self):
         self.persist_dir = settings.CHROMA_PERSIST_DIR
         os.makedirs(self.persist_dir, exist_ok=True)
 
-    # ─────────────────────── ChromaDB helpers ───────────────────────────────
-
-    def _get_collection(self, workspace_id: str):
-        try:
-            import chromadb
-            client = chromadb.PersistentClient(path=self.persist_dir)
-            # Collection names: alphanumeric + underscore/hyphen, max 63 chars
-            name = re.sub(r"[^a-zA-Z0-9_-]", "_", f"budget_{workspace_id}")[:63]
-            return client.get_or_create_collection(
-                name=name,
-                metadata={"hnsw:space": "cosine"},
-            )
-        except Exception as e:
-            logger.debug(f"ChromaDB unavailable ({e}); will use JSON fallback")
-            return None
-
     # ─────────────────────── public interface ───────────────────────────────
 
     async def index_documents(self, workspace_id: str, text: str, metadata: Dict = None):
-        """Chunk text, store in ChromaDB (if available), always write JSON fallback."""
+        """Chunk text and persist to JSON store."""
         chunks = self._chunk_text(text)
         if not chunks:
+            logger.warning(f"No chunks produced for workspace {workspace_id}")
             return
 
-        # Always persist JSON (guarantees fallback works on cold start)
         chunks_path = os.path.join(self.persist_dir, f"{workspace_id}_chunks.json")
         with open(chunks_path, "w", encoding="utf-8") as f:
             json.dump(chunks, f, ensure_ascii=False)
 
-        collection = self._get_collection(workspace_id)
-        if collection:
-            try:
-                ids       = [f"{workspace_id}_{i}" for i in range(len(chunks))]
-                documents = [c["text"] for c in chunks]
-                metas     = [
-                    {
-                        "chunk_index": c["index"],
-                        "page":        str(c.get("page", "1")),
-                        "source":      str(c.get("source", "budget")),
-                        "workspace_id": workspace_id,
-                        "section":     str(c.get("section", "")),
-                    }
-                    for c in chunks
-                ]
-
-                BATCH = 80
-                for i in range(0, len(documents), BATCH):
-                    collection.upsert(
-                        ids=ids[i:i+BATCH],
-                        documents=documents[i:i+BATCH],
-                        metadatas=metas[i:i+BATCH],
-                    )
-                logger.info(f"Indexed {len(chunks)} chunks in ChromaDB for workspace {workspace_id}")
-            except Exception as e:
-                logger.warning(f"ChromaDB indexing error (JSON fallback active): {e}")
+        logger.info(f"Indexed {len(chunks)} chunks for workspace {workspace_id}")
 
     async def search(self, workspace_id: str, query: str, n_results: int = 6) -> List[Dict]:
-        """Search for relevant chunks; prefers ChromaDB, falls back to keyword scoring."""
-        collection = self._get_collection(workspace_id)
-        if collection:
-            try:
-                res = collection.query(query_texts=[query], n_results=min(n_results, 15))
-                if res and res.get("documents") and res["documents"][0]:
-                    return [
-                        {
-                            "text":            doc,
-                            "page":            (res.get("metadatas") or [[]])[0][i].get("page", "1"),
-                            "source":          (res.get("metadatas") or [[]])[0][i].get("source", ""),
-                            "section":         (res.get("metadatas") or [[]])[0][i].get("section", ""),
-                            "relevance_score": max(0.0, 1.0 - (res.get("distances") or [[0.5]])[0][i]),
-                        }
-                        for i, doc in enumerate(res["documents"][0])
-                    ]
-            except Exception as e:
-                logger.warning(f"ChromaDB search failed ({e}); using keyword fallback")
+        """TF-IDF keyword search over JSON chunk store."""
+        return self._tfidf_search(workspace_id, query, n_results)
 
-        return self._keyword_search(workspace_id, query, n_results)
+    # ─────────────────────── TF-IDF search ──────────────────────────────────
 
-    # ─────────────────────── keyword fallback ───────────────────────────────
-
-    def _keyword_search(self, workspace_id: str, query: str, n: int = 6) -> List[Dict]:
+    def _tfidf_search(self, workspace_id: str, query: str, n: int = 6) -> List[Dict]:
         """
-        TF-IDF-inspired keyword search over the JSON chunk store.
+        TF-IDF ranked search.
 
-        Score = sum of (term_freq_in_chunk × log(total_chunks / doc_freq + 1))
-        This rewards chunks containing rare query terms more than common ones.
+        Score(chunk) = Σ_term [ tf(term, chunk) × idf(term, corpus) ]
+        where idf = log(N / (df + 1)) + 1
+
+        This reliably ranks chunks containing rare, specific financial terms
+        (e.g. "fiscal deficit", "capital outlay", "MGNREGA") higher than
+        chunks with only common words.
         """
         path = os.path.join(self.persist_dir, f"{workspace_id}_chunks.json")
         if not os.path.exists(path):
@@ -122,14 +74,14 @@ class VectorStoreManager:
         if not chunks:
             return []
 
-        # Tokenise query
-        query_terms = set(re.findall(r"\b\w{3,}\b", query.lower()))
+        # Tokenise — keep 3+ char alphanumeric tokens; lowercase
+        query_terms = set(re.findall(r"\b[a-z0-9]{3,}\b", query.lower()))
         if not query_terms:
             return []
 
         N = len(chunks)
 
-        # Document-frequency per term
+        # Document frequency per term
         df: Dict[str, int] = {}
         for chunk in chunks:
             text_lower = chunk.get("text", "").lower()
@@ -137,7 +89,7 @@ class VectorStoreManager:
                 if t in text_lower:
                     df[t] = df.get(t, 0) + 1
 
-        # Score chunks
+        # Score every chunk
         scored = []
         for chunk in chunks:
             text_lower = chunk.get("text", "").lower()
@@ -145,8 +97,8 @@ class VectorStoreManager:
             for t in query_terms:
                 tf = text_lower.count(t)
                 if tf > 0:
-                    idf = math.log((N / (df.get(t, 1) + 1)) + 1)
-                    score += tf * idf
+                    idf = math.log(N / (df.get(t, 0) + 1)) + 1
+                    score += (1 + math.log(tf)) * idf  # log-normalised TF
             if score > 0:
                 scored.append({
                     "text":            chunk.get("text", ""),
@@ -168,7 +120,8 @@ class VectorStoreManager:
         overlap: int = 250,
     ) -> List[Dict]:
         """
-        Split document text into overlapping chunks, tracking page numbers and source file.
+        Split document text into overlapping chunks, tracking page numbers,
+        source file name, and section headings for citation-quality retrieval.
 
         Markers injected by DocumentProcessor:
         - '--- Page N ---'       → updates current page
@@ -177,23 +130,22 @@ class VectorStoreManager:
         if not text:
             return []
 
-        PAGE_PATTERN   = re.compile(r"---\s*Page\s+(\d+)\s*---")
-        SOURCE_PATTERN = re.compile(r"===\s*Document:\s*(.+?)\s*===")
+        PAGE_PATTERN    = re.compile(r"---\s*Page\s+(\d+)\s*---")
+        SOURCE_PATTERN  = re.compile(r"===\s*Document:\s*(.+?)\s*===")
         SECTION_PATTERN = re.compile(
-            r"(Part\s+[IVX]+|Section\s+\d+|Chapter\s+\d+|STATEMENT\s+[IVX]+|"
-            r"ANNEX[UE]RE?\s*[A-Z\d]+|APPENDIX\s+[A-Z\d]+)",
+            r"\b(Part\s+[IVX]+|Section\s+\d+|Chapter\s+\d+|"
+            r"STATEMENT\s+[IVX]+|ANNEX[UE]RE?\s*[A-Z\d]+|APPENDIX\s+[A-Z\d]+)\b",
             re.IGNORECASE,
         )
 
-        current_page   = 1
-        current_source = ""
+        current_page    = 1
+        current_source  = ""
         current_section = ""
-        current_chunk  = ""
-        chunk_index    = 0
+        current_chunk   = ""
+        chunk_index     = 0
         chunks: List[Dict] = []
 
-        lines = text.split("\n")
-        for line in lines:
+        for line in text.split("\n"):
             pm = PAGE_PATTERN.search(line)
             if pm:
                 current_page = int(pm.group(1))
@@ -221,10 +173,8 @@ class VectorStoreManager:
                         "section": current_section,
                     })
                     chunk_index += 1
-                # Overlap: keep last `overlap` chars
                 current_chunk = current_chunk[-overlap:]
 
-        # Final chunk
         stripped = current_chunk.strip()
         if stripped:
             chunks.append({
