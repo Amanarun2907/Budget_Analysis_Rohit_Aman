@@ -28,15 +28,14 @@ function renderMarkdown(text: string): React.ReactNode {
   const elements: React.ReactNode[] = [];
   let key = 0;
 
-  const inlineFormat = (line: string): React.ReactNode => {
-    // Bold **text**
-    const parts = line.split(/(\*\*[^*]+\*\*)/g);
+const inlineFormat = (line: string): React.ReactNode => {
+    // Split on bold **text** and inline `code` patterns simultaneously
+    const parts = line.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         return <strong key={i} className="text-white font-semibold">{part.slice(2, -2)}</strong>;
       }
-      // Inline code `text`
-      if (part.startsWith('`') && part.endsWith('`')) {
+      if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
         return <code key={i} className="px-1 py-0.5 rounded bg-slate-800 text-blue-300 text-[11px] font-mono">{part.slice(1, -1)}</code>;
       }
       return part;

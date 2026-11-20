@@ -316,34 +316,41 @@ class DocumentProcessor:
                     break
 
         if "financial_year" not in props:
-            props["financial_year"] = "2024-25"  # safe default
+            # Cannot determine year from document — leave null rather than fabricating a year.
+            # The UI will show "Not specified" and the LLM agents will also attempt extraction.
+            props["financial_year"] = None
 
         # ── State or Union detection ──
-        detected_state: Optional[str] = None
-        for state in self.INDIAN_STATES:
-            if state.lower() in tl:
-                # Confirm it's not just a passing mention — require ≥2 occurrences
-                if tl.count(state.lower()) >= 2:
-                    detected_state = state
-                    break
+        # IMPORTANT: check union-level signals FIRST to avoid a Union Budget being
+        # misclassified as a state budget simply because it names a state ≥2 times
+        # (which is extremely common in Union Budget speeches covering devolution, PMGSY, etc.)
+        union_signals = [
+            "union budget", "government of india", "ministry of finance",
+            "nirmala sitharaman", "consolidated fund of india",
+            "annual financial statement", "demand for grants",
+            "budget speech", "finance minister of india",
+            "central government", "union territories",
+            "parliament of india", "lok sabha", "rajya sabha",
+        ]
+        is_union_doc = any(sig in tl for sig in union_signals)
 
-        if detected_state:
+        detected_state: Optional[str] = None
+        # Only scan for state names if we haven't already confirmed this is a Union document
+        if not is_union_doc:
+            for state in self.INDIAN_STATES:
+                if state.lower() in tl:
+                    # Require ≥2 occurrences to avoid false positives from passing mentions
+                    if tl.count(state.lower()) >= 2:
+                        detected_state = state
+                        break
+
+        if detected_state and not is_union_doc:
             props["government_level"] = "state"
             props["state_name"]       = detected_state
             props["government_name"]  = f"Government of {detected_state}"
         else:
-            # Check for strong Union-level indicators
-            union_signals = [
-                "union budget", "government of india", "ministry of finance",
-                "nirmala sitharaman", "consolidated fund of india",
-                "annual financial statement", "demand for grants",
-            ]
-            if any(sig in tl for sig in union_signals):
-                props["government_level"] = "union"
-                props["government_name"]  = "Government of India"
-            else:
-                props["government_level"] = "union"
-                props["government_name"]  = "Government of India"
+            props["government_level"] = "union"
+            props["government_name"]  = "Government of India"
 
         # ── Document type ──
         doc_type_map = {
