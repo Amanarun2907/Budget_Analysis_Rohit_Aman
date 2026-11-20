@@ -44,16 +44,27 @@ export default function App() {
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [workspaceLostError, setWorkspaceLostError] = useState(false);
 
   // 1. Initial Load of Workspaces
   useEffect(() => {
     loadWorkspaces();
   }, []);
 
-  // 2. Poll status if workspace is processing
+  // 2. Poll status if workspace is processing or uploaded
   useEffect(() => {
     let interval: any;
+    setWorkspaceLostError(false);
+
     if (currentWorkspace && currentWorkspace.processing_status !== 'completed' && currentWorkspace.processing_status !== 'failed') {
+      // Auto-trigger analysis if currently in 'uploaded' state
+      if (currentWorkspace.processing_status === 'uploaded') {
+        budgetApi.startAnalysis(currentWorkspace.id).catch((err) => {
+          console.warn('Auto-trigger startAnalysis error:', err);
+        });
+      }
+
       interval = setInterval(async () => {
         try {
           const status = await budgetApi.getAnalysisStatus(currentWorkspace.id);
@@ -62,9 +73,19 @@ export default function App() {
             clearInterval(interval);
             loadAnalysis(currentWorkspace.id);
             loadWorkspaces();
+          } else if (status.status === 'uploaded') {
+            // Re-trigger if still sitting in uploaded
+            budgetApi.startAnalysis(currentWorkspace.id).catch(() => {});
+          } else if (status.status === 'failed') {
+            clearInterval(interval);
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error('Status poll error:', e);
+          const msg = e.message || '';
+          if (msg.includes('404') || msg.includes('not found') || msg.includes('Workspace not found')) {
+            clearInterval(interval);
+            setWorkspaceLostError(true);
+          }
         }
       }, 3000);
     }
@@ -85,7 +106,6 @@ export default function App() {
     try {
       const res = await budgetApi.listWorkspaces();
       setWorkspaces(res.workspaces);
-      // Intentionally do NOT auto-select workspaces so user always lands on the overview & upload page first
     } catch (e) {
       console.error('Failed to load workspaces:', e);
     } finally {
@@ -99,6 +119,24 @@ export default function App() {
       setAnalysisData(res);
     } catch (e) {
       console.error('Failed to load analysis:', e);
+    }
+  };
+
+  const handleRetryAnalysis = async () => {
+    if (!currentWorkspace) return;
+    setIsRetrying(true);
+    try {
+      await budgetApi.startAnalysis(currentWorkspace.id);
+      setCurrentWorkspace({
+        ...currentWorkspace,
+        processing_status: 'processing',
+        processing_progress: 5.0,
+      });
+    } catch (err: any) {
+      console.error('Retry analysis error:', err);
+      alert('Could not restart analysis: ' + (err.message || 'Server error. Please re-upload.'));
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -149,57 +187,100 @@ export default function App() {
         {/* Workspace In-Progress / Processing Banner */}
         {currentWorkspace && currentWorkspace.processing_status !== 'completed' && currentWorkspace.processing_status !== 'failed' && (
           <div className="mb-6 p-5 rounded-2xl bg-slate-900 border border-blue-500/30 shadow-xl space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
-                <div>
-                  <h3 className="text-sm font-bold text-white">
-                    Multi-Agent Economic Pipeline In Progress
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Stage: {statusData?.current_stage || 'Extracting tables & numerical data'}
-                  </p>
+            
+            {/* If server wiped ephemeral database */}
+            {workspaceLostError ? (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span className="text-xs">
+                    This budget session expired when the cloud server restarted. Please re-upload your budget or explore the verified demo budget.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleCreateSampleBudget()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+                  >
+                    Load Demo Budget
+                  </button>
+                  <button
+                    onClick={() => setIsUploadOpen(true)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+                  >
+                    Re-upload Document
+                  </button>
                 </div>
               </div>
-              <div className="text-right">
-                <span className="text-sm font-extrabold text-blue-400 font-mono">
-                  {statusData ? statusData.progress.toFixed(0) : (currentWorkspace.processing_progress || 0)}%
-                </span>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div
-                className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-500 rounded-full"
-                style={{ width: `${statusData ? statusData.progress : (currentWorkspace.processing_progress || 5)}%` }}
-              />
-            </div>
-
-            {/* Pipeline Stage Pills */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
-              {(statusData?.stages || [
-                { name: 'Document OCR', status: 'completed' },
-                { name: 'Vector Store', status: 'in_progress' },
-                { name: 'Financial Extraction', status: 'pending' },
-                { name: 'Revenue & Outlay', status: 'pending' },
-                { name: 'Deficit & Sectors', status: 'pending' },
-                { name: 'Report Generation', status: 'pending' },
-              ]).map((st: any, i: number) => (
-                <div
-                  key={i}
-                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-center border truncate ${
-                    st.status === 'completed'
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                      : st.status === 'in_progress'
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 animate-pulse'
-                      : 'bg-slate-800/40 border-slate-800 text-slate-500'
-                  }`}
-                >
-                  {st.name}
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <Loader2 className="h-5 w-5 text-blue-400 animate-spin" />
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Multi-Agent Economic Pipeline In Progress</span>
+                        {currentWorkspace.processing_status === 'uploaded' && (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 font-mono">
+                            Initiating AI Agents...
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Stage: {statusData?.current_stage || (currentWorkspace.processing_status === 'uploaded' ? 'Initiating Extraction Pipeline...' : 'Extracting tables & numerical data')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleRetryAnalysis}
+                      disabled={isRetrying}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors"
+                      title="Force restart analysis if stalled"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                      <span>{isRetrying ? 'Starting...' : 'Restart Analysis'}</span>
+                    </button>
+                    <span className="text-sm font-extrabold text-blue-400 font-mono">
+                      {statusData ? statusData.progress.toFixed(0) : (currentWorkspace.processing_progress || 0)}%
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full transition-all duration-500 rounded-full"
+                    style={{ width: `${Math.max(5, statusData ? statusData.progress : (currentWorkspace.processing_progress || 5))}%` }}
+                  />
+                </div>
+
+                {/* Pipeline Stage Pills */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-1">
+                  {(statusData?.stages || [
+                    { name: 'Document OCR', status: 'completed' },
+                    { name: 'Vector Store', status: 'in_progress' },
+                    { name: 'Financial Extraction', status: 'pending' },
+                    { name: 'Revenue & Outlay', status: 'pending' },
+                    { name: 'Deficit & Sectors', status: 'pending' },
+                    { name: 'Report Generation', status: 'pending' },
+                  ]).map((st: any, i: number) => (
+                    <div
+                      key={i}
+                      className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-center border truncate ${
+                        st.status === 'completed'
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                          : st.status === 'in_progress'
+                          ? 'bg-blue-500/20 border-blue-500/40 text-blue-300 animate-pulse'
+                          : 'bg-slate-800/40 border-slate-800 text-slate-500'
+                      }`}
+                    >
+                      {st.name}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 

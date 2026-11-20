@@ -127,37 +127,100 @@ async def start_analysis(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
+    """
+    Start budget analysis pipeline.
+    - Validates workspace and documents exist
+    - Resets status so frontend shows progress immediately
+    - Fires analysis in background (non-blocking response)
+    """
     result = await db.execute(
         select(BudgetWorkspace).where(BudgetWorkspace.id == request.workspace_id)
     )
     workspace = result.scalar_one_or_none()
     if not workspace:
         raise HTTPException(status_code=404, detail="Workspace not found")
-    
+
     # Check if documents exist
     doc_result = await db.execute(
         select(BudgetDocument).where(BudgetDocument.workspace_id == request.workspace_id)
     )
     docs = doc_result.scalars().all()
     if not docs:
-        raise HTTPException(status_code=400, detail="No documents uploaded yet. Please upload budget documents first.")
-    
-    # Set status
+        raise HTTPException(status_code=400, detail="No documents uploaded yet.")
+
+    # Validate uploaded file paths actually exist on disk
+    missing_files = [d for d in docs if not __import__('os').path.exists(d.file_path)]
+    if missing_files:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{len(missing_files)} uploaded file(s) are missing from disk "
+                f"(Render ephemeral disk was likely reset). "
+                f"Please delete this workspace and re-upload the files."
+            )
+        )
+
+    # Reset/init status so frontend sees live progress from 5%
     workspace.processing_status = ProcessingStatus.PROCESSING.value
     workspace.processing_progress = 5.0
+    workspace.analysis_completed = False
     await db.commit()
-    
-    # Run orchestrator in background
-    background_tasks.add_task(
-        BudgetAnalysisOrchestrator.run_analysis,
-        request.workspace_id
-    )
-    
+
+    # Fire analysis as a persistent asyncio Task (not just BackgroundTask)
+    # asyncio.create_task survives within the same process — more reliable than
+    # FastAPI BackgroundTasks when the response returns before the task finishes.
+    import asyncio
+    asyncio.create_task(BudgetAnalysisOrchestrator.run_analysis(request.workspace_id))
+
     return {
         "status": "started",
         "workspace_id": request.workspace_id,
-        "message": "Analysis started successfully. Progress can be monitored via /status."
+        "message": "Analysis pipeline started. Monitor progress at /api/analysis/status/{workspace_id}."
     }
+
+
+@router.post("/retry/{workspace_id}")
+async def retry_analysis(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Retry a failed or stuck analysis.
+    Safe to call multiple times — idempotent if already completed.
+    """
+    result = await db.execute(
+        select(BudgetWorkspace).where(BudgetWorkspace.id == workspace_id)
+    )
+    workspace = result.scalar_one_or_none()
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+
+    if workspace.analysis_completed and workspace.processing_status == ProcessingStatus.COMPLETED.value:
+        return {"status": "already_completed", "workspace_id": workspace_id}
+
+    doc_result = await db.execute(
+        select(BudgetDocument).where(BudgetDocument.workspace_id == workspace_id)
+    )
+    docs = doc_result.scalars().all()
+    if not docs:
+        raise HTTPException(status_code=400, detail="No documents. Please re-upload.")
+
+    missing = [d for d in docs if not __import__('os').path.exists(d.file_path)]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail="Uploaded files are missing from disk (Render reset). Delete workspace and re-upload."
+        )
+
+    workspace.processing_status = ProcessingStatus.PROCESSING.value
+    workspace.processing_progress = 5.0
+    workspace.analysis_completed = False
+    await db.commit()
+
+    import asyncio
+    asyncio.create_task(BudgetAnalysisOrchestrator.run_analysis(workspace_id))
+
+    return {"status": "retrying", "workspace_id": workspace_id}
 
 @router.get("/status/{workspace_id}", response_model=AnalysisStatusResponse)
 async def get_analysis_status(workspace_id: str, db: AsyncSession = Depends(get_db)):

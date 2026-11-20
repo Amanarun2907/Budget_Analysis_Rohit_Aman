@@ -31,14 +31,21 @@ class BudgetAnalysisOrchestrator:
     
     @staticmethod
     async def run_analysis(workspace_id: str):
-        """Run complete analysis pipeline for a workspace."""
+        """
+        Run complete analysis pipeline for a workspace.
+
+        Each stage updates progress so the frontend always shows live progress.
+        Errors in any stage are caught and reported — the pipeline never hangs.
+        """
+        import os as _os
         from app.db.database import async_session
         from app.models.budget import (
             BudgetWorkspace, BudgetDocument, FinancialEntry,
             SectorAnalysis, SchemeAnalysis, ProcessingStatus
         )
         from sqlalchemy import select
-        
+
+        # Open a NEW session — the calling request's session is already closed
         async with async_session() as db:
             try:
                 result = await db.execute(
@@ -46,8 +53,10 @@ class BudgetAnalysisOrchestrator:
                 )
                 workspace = result.scalar_one_or_none()
                 if not workspace:
-                    logger.error(f"Workspace not found: {workspace_id}")
+                    logger.error(f"[Orchestrator] Workspace not found: {workspace_id}")
                     return
+
+                logger.info(f"[Orchestrator] Starting analysis for '{workspace.name}' ({workspace_id})")
                 
                 # Stage 1: Document Ingestion & Extraction (5-15%)
                 logger.info(f"Stage 1: Extracting documents for workspace {workspace_id}")

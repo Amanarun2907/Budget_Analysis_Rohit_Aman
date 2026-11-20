@@ -111,10 +111,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setError(null);
 
     try {
-      // 1. Ping backend in background to wake up Render (non-blocking)
-      budgetApi.checkHealth().catch(() => {});
+      // 1. Ping backend in background to wake up Render
+      await budgetApi.checkHealth().catch(() => {});
 
       // 2. Create Workspace
+      setUploadStage('creating');
       const workspace = await budgetApi.createWorkspace({
         name: budgetName,
         government_level: govLevel,
@@ -127,18 +128,30 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setUploadStage('uploading');
       await budgetApi.uploadDocuments(workspace.id, selectedFiles);
 
-      // 4. Close modal IMMEDIATELY — user sees dashboard while analysis runs in background
+      // 4. Start Analysis & AWAIT confirmation before closing modal
+      // This guarantees the backend analysis task is actually running and not lost
       setUploadStage('starting');
-      onWorkspaceCreated(workspace);
+      try {
+        await budgetApi.startAnalysis(workspace.id);
+      } catch (startErr: any) {
+        console.warn('Initial startAnalysis attempt notice:', startErr);
+        // Fallback: try one more time if server was busy
+        await budgetApi.startAnalysis(workspace.id);
+      }
+
+      // 5. Update workspace with active processing state before handoff
+      const activeWorkspace: Workspace = {
+        ...workspace,
+        processing_status: 'processing',
+        processing_progress: 5.0,
+      };
+
+      onWorkspaceCreated(activeWorkspace);
       onClose();
 
-      // 5. Fire analysis as non-blocking background job (after modal closed)
-      budgetApi.startAnalysis(workspace.id).catch((err) => {
-        console.warn('Background analysis start error (non-fatal):', err);
-      });
-
     } catch (err: any) {
-      const msg = err.message || 'Failed to upload and initiate budget analysis';
+      console.error('Upload submission error:', err);
+      const msg = err.message || 'Failed to upload and initiate budget analysis. Please check server connection.';
       setError(msg);
       setIsSubmitting(false);
       setUploadStage('idle');
