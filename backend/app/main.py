@@ -9,7 +9,7 @@ import asyncio
 
 from app.core.config import settings
 from app.db.database import init_db
-from app.api.routes import documents, analysis, chat, reports, visualizations, health
+from app.api.routes import documents, analysis, chat, reports, visualizations, health, union_intelligence, observability, mcp
 
 logger = structlog.get_logger()
 
@@ -175,6 +175,9 @@ app.include_router(analysis.router, prefix="/api/analysis", tags=["Analysis"])
 app.include_router(chat.router, prefix="/api/chat", tags=["Chat"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(visualizations.router, prefix="/api/visualizations", tags=["Visualizations"])
+app.include_router(union_intelligence.router, prefix="/api/union-intelligence", tags=["Union Intelligence"])
+app.include_router(observability.router, prefix="/api/observability", tags=["Observability & Evaluation"])
+app.include_router(mcp.router, prefix="/api/mcp", tags=["Model Context Protocol (MCP)"])
 
 # Mount frontend production build if available
 frontend_dist = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))

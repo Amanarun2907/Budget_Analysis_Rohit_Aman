@@ -170,5 +170,82 @@ export const budgetApi = {
     }
     return res.json();
   },
+
+  // Union Budget Deep Intelligence & Analysis
+  async getUnionIntelligenceOverview(): Promise<any> {
+    const res = await fetch(`${API_BASE}/union-intelligence/overview`);
+    if (!res.ok) throw new Error('Failed to fetch Union Intelligence overview');
+    return res.json();
+  },
+
+  async runWhatIfSimulation(data: {
+    nominal_gdp_growth_pct: number;
+    crude_oil_price_usd: number;
+    disinvestment_realization_pct: number;
+    tax_buoyancy: number;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/union-intelligence/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to run economic simulation');
+    return res.json();
+  },
+
+  async calculateTaxRegimes(data: {
+    gross_annual_income: number;
+    sec_80c_investment?: number;
+    sec_80d_health?: number;
+    hra_exemption?: number;
+    other_deductions?: number;
+  }): Promise<any> {
+    const res = await fetch(`${API_BASE}/union-intelligence/calculate-tax`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) throw new Error('Failed to calculate tax comparison');
+    return res.json();
+  },
+
+  async getUPSCInsights(): Promise<any> {
+    const res = await fetch(`${API_BASE}/union-intelligence/upsc-insights`);
+    if (!res.ok) throw new Error('Failed to fetch UPSC & Constitutional insights');
+    return res.json();
+  },
+
+  // Observability, Tracing & Performance Evaluation
+  async getObservabilityTrace(workspaceId: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/observability/trace/${workspaceId}`);
+    if (!res.ok) throw new Error('Failed to fetch observability trace');
+    return res.json();
+  },
+
+  async getObservabilityMetrics(): Promise<any> {
+    const res = await fetch(`${API_BASE}/observability/metrics`);
+    if (!res.ok) throw new Error('Failed to fetch system metrics');
+    return res.json();
+  },
+
+  // Model Context Protocol (MCP) Tools
+  async listMCPTools(): Promise<any> {
+    const res = await fetch(`${API_BASE}/mcp/tools`);
+    if (!res.ok) throw new Error('Failed to list MCP tools');
+    return res.json();
+  },
+
+  async executeMCPTool(name: string, args: Record<string, any>): Promise<any> {
+    const res = await fetch(`${API_BASE}/mcp/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, arguments: args }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'MCP Tool execution failed');
+    }
+    return res.json();
+  },
 };
 

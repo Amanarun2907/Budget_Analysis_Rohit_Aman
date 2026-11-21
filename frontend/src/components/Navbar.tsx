@@ -22,6 +22,9 @@ interface NavbarProps {
   onToggleChat: () => void;
   isChatOpen: boolean;
   onGoHome: () => void;
+  onOpenUnionIntelligence?: () => void;
+  onOpenObservability?: () => void;
+  activeViewMode?: 'workspace' | 'union_deep' | 'observability';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -33,6 +36,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleChat,
   isChatOpen,
   onGoHome,
+  onOpenUnionIntelligence,
+  onOpenObservability,
+  activeViewMode = 'workspace',
 }) => {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-slate-900/90 backdrop-blur-md">
@@ -122,6 +128,31 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           )}
+        </div>
+
+        {/* Primary Feature Sections: Union Intelligence & Observability */}
+        <div className="hidden lg:flex items-center gap-2">
+          <button
+            onClick={onOpenUnionIntelligence}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeViewMode === 'union_deep'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 ring-1 ring-blue-400'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+            }`}
+          >
+            <span>🏛️ Union Intelligence</span>
+          </button>
+
+          <button
+            onClick={onOpenObservability}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              activeViewMode === 'observability'
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-1 ring-indigo-400'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+            }`}
+          >
+            <span>⚡ Observability &amp; Tracing</span>
+          </button>
         </div>
 
         {/* Action Controls */}
