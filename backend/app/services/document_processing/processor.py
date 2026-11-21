@@ -31,24 +31,29 @@ class DocumentProcessor:
     # ─────────────────────── dispatch ───────────────────────────────────────
 
     async def process_document(self, file_path: str, file_type: str) -> Dict[str, Any]:
+        """Runs document processing in a separate thread so ASGI event loop stays completely responsive."""
+        import asyncio
+        return await asyncio.to_thread(self._process_document_sync, file_path, file_type)
+
+    def _process_document_sync(self, file_path: str, file_type: str) -> Dict[str, Any]:
         try:
             logger.info("Processing document", path=file_path, type=file_type)
             ext = file_type.lower().lstrip(".")
 
             dispatch = {
-                "pdf":  self._process_pdf,
-                "docx": self._process_docx,
-                "xlsx": self._process_excel,
-                "xls":  self._process_excel,
-                "csv":  self._process_csv,
-                "txt":  self._process_text,
-                "text": self._process_text,
-                "jpg":  self._process_image,
-                "jpeg": self._process_image,
-                "png":  self._process_image,
+                "pdf":  self._process_pdf_sync,
+                "docx": self._process_docx_sync,
+                "xlsx": self._process_excel_sync,
+                "xls":  self._process_excel_sync,
+                "csv":  self._process_csv_sync,
+                "txt":  self._process_text_sync,
+                "text": self._process_text_sync,
+                "jpg":  self._process_image_sync,
+                "jpeg": self._process_image_sync,
+                "png":  self._process_image_sync,
             }
-            handler = dispatch.get(ext, self._process_fallback)
-            return await handler(file_path)
+            handler = dispatch.get(ext, self._process_fallback_sync)
+            return handler(file_path)
 
         except Exception as e:
             logger.error("Document processing error", error=str(e), path=file_path)
@@ -56,12 +61,12 @@ class DocumentProcessor:
 
     # ─────────────────────── PDF ─────────────────────────────────────────────
 
-    async def _process_pdf(self, file_path: str) -> Dict[str, Any]:
+    def _process_pdf_sync(self, file_path: str) -> Dict[str, Any]:
         """
         Fast, latency-optimized PDF extraction with intelligent page prioritization.
         - Text extracted across all pages in under 1 second.
-        - Table extraction prioritizes high-value summary pages containing key financial terms.
-        - Hard cap of 20 tables max prevents CPU exhaustion and multi-minute freezing.
+        - Table extraction prioritizes high-value summary pages in the first 25 pages.
+        - Hard cap of 15 tables max prevents CPU exhaustion and multi-minute freezing.
         """
         try:
             import fitz  # PyMuPDF
@@ -83,28 +88,26 @@ class DocumentProcessor:
                 text = page.get_text("text") or ""
                 full_text += f"\n--- Page {page_num + 1} ---\n{text}"
 
-                # Only search for vector tables on pages likely to contain summary tables,
-                # or the first 20 pages, and stop once we have 20 high-quality tables.
-                tl = text.lower()
-                is_high_value_page = page_num < 20 or any(k in tl for k in TABLE_KEYWORDS)
-
-                if is_high_value_page and len(tables) < 20:
-                    try:
-                        page_tables = page.find_tables()
-                        for tbl in page_tables:
-                            if len(tables) >= 20:
-                                break
-                            data = tbl.extract()
-                            if data and len(data) >= 2:
-                                tables.append({
-                                    "table_index": len(tables),
-                                    "data": [[str(c or "").strip() for c in row] for row in data],
-                                    "source_page": page_num + 1,
-                                })
-                    except Exception:
-                        if len(tables) < 20:
-                            page_tables = self._extract_tables_heuristic(text, page_num + 1)
-                            tables.extend(page_tables[:20 - len(tables)])
+                # Indian Union & State summary tables are located within the first 25 pages
+                if page_num < 25 and len(tables) < 15:
+                    tl = text.lower()
+                    if any(k in tl for k in TABLE_KEYWORDS):
+                        try:
+                            page_tables = page.find_tables()
+                            for tbl in page_tables:
+                                if len(tables) >= 15:
+                                    break
+                                data = tbl.extract()
+                                if data and len(data) >= 2:
+                                    tables.append({
+                                        "table_index": len(tables),
+                                        "data": [[str(c or "").strip() for c in row] for row in data],
+                                        "source_page": page_num + 1,
+                                    })
+                        except Exception:
+                            if len(tables) < 15:
+                                page_tables = self._extract_tables_heuristic(text, page_num + 1)
+                                tables.extend(page_tables[:15 - len(tables)])
 
             metadata = {
                 "page_count": page_count,
@@ -138,7 +141,7 @@ class DocumentProcessor:
 
     # ─────────────────────── Image OCR ──────────────────────────────────────
 
-    async def _process_image(self, file_path: str) -> Dict[str, Any]:
+    def _process_image_sync(self, file_path: str) -> Dict[str, Any]:
         try:
             import pytesseract
             from PIL import Image
@@ -163,7 +166,7 @@ class DocumentProcessor:
 
     # ─────────────────────── DOCX ───────────────────────────────────────────
 
-    async def _process_docx(self, file_path: str) -> Dict[str, Any]:
+    def _process_docx_sync(self, file_path: str) -> Dict[str, Any]:
         try:
             from docx import Document
 
@@ -186,11 +189,11 @@ class DocumentProcessor:
             }
         except Exception as e:
             logger.warning(f"DOCX fallback: {e}")
-            return await self._process_text(file_path)
+            return self._process_text_sync(file_path)
 
     # ─────────────────────── Excel ──────────────────────────────────────────
 
-    async def _process_excel(self, file_path: str) -> Dict[str, Any]:
+    def _process_excel_sync(self, file_path: str) -> Dict[str, Any]:
         try:
             import pandas as pd
 
@@ -219,11 +222,11 @@ class DocumentProcessor:
             }
         except Exception as e:
             logger.warning(f"Excel read error: {e}")
-            return await self._process_fallback(file_path)
+            return self._process_fallback_sync(file_path)
 
     # ─────────────────────── CSV ─────────────────────────────────────────────
 
-    async def _process_csv(self, file_path: str) -> Dict[str, Any]:
+    def _process_csv_sync(self, file_path: str) -> Dict[str, Any]:
         try:
             import pandas as pd
 
@@ -239,11 +242,11 @@ class DocumentProcessor:
             }
         except Exception as e:
             logger.warning(f"CSV error: {e}")
-            return await self._process_text(file_path)
+            return self._process_text_sync(file_path)
 
     # ─────────────────────── Plain text ─────────────────────────────────────
 
-    async def _process_text(self, file_path: str) -> Dict[str, Any]:
+    def _process_text_sync(self, file_path: str) -> Dict[str, Any]:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             text = f.read()
         detected = self._detect_properties(text)
@@ -256,7 +259,7 @@ class DocumentProcessor:
 
     # ─────────────────────── Fallback ────────────────────────────────────────
 
-    async def _process_fallback(self, file_path: str) -> Dict[str, Any]:
+    def _process_fallback_sync(self, file_path: str) -> Dict[str, Any]:
         try:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()

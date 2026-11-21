@@ -43,7 +43,7 @@ export const budgetApi = {
       return res.json();
     } catch (e: any) {
       if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
-        throw new Error('Cannot connect to backend server at http://127.0.0.1:8000. Please ensure uvicorn is running.');
+        throw new Error(`Cannot connect to backend server at ${API_BASE}. If Render is waking from sleep, please wait a few seconds and retry.`);
       }
       throw e;
     }

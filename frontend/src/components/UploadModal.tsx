@@ -46,13 +46,29 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Health-check the backend when modal opens
+  // Health-check the backend when modal opens with auto-retry
   useEffect(() => {
     if (!isOpen) return;
-    setBackendOk(null);
-    budgetApi.checkHealth()
-      .then(() => setBackendOk(true))
-      .catch(() => setBackendOk(false));
+    let cancelled = false;
+
+    const probe = async () => {
+      try {
+        await budgetApi.checkHealth();
+        if (!cancelled) setBackendOk(true);
+      } catch {
+        if (!cancelled) {
+          setBackendOk(false);
+          // Auto retry after 3 seconds if not yet connected
+          setTimeout(probe, 3000);
+        }
+      }
+    };
+
+    probe();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -185,20 +201,35 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
 
           {/* Backend Status Banner */}
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs border ${
+          <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
             backendOk === null
               ? 'bg-slate-800/50 border-slate-700 text-slate-400'
               : backendOk
               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-              : 'bg-red-500/10 border-red-500/20 text-red-300'
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
           }`}>
-            {backendOk === null ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /><span>Connecting to backend AI engine at {API_BASE}...</span></>
-            ) : backendOk ? (
-              <><Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-400" /><span>Backend connected — AI Analysis Engine active at <code className="font-mono bg-emerald-500/10 px-1 rounded">{API_BASE}</code></span></>
-            ) : (
-              <><WifiOff className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-              <span>Connecting to cloud backend at <code className="font-mono bg-amber-500/10 px-1 rounded">{API_BASE}</code>. If Render is waking from sleep, please wait a few seconds and retry.</span></>
+            <div className="flex items-center gap-2">
+              {backendOk === null ? (
+                <><Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-blue-400" /><span>Connecting to backend AI engine...</span></>
+              ) : backendOk ? (
+                <><Wifi className="h-3.5 w-3.5 shrink-0 text-emerald-400" /><span>✓ Backend Connected &amp; Multi-Agent Pipeline Active</span></>
+              ) : (
+                <><WifiOff className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>Cloud backend is warming up. You can select your file and click Start below anytime.</span></>
+              )}
+            </div>
+
+            {backendOk === false && (
+              <button
+                type="button"
+                onClick={() => {
+                  setBackendOk(null);
+                  budgetApi.checkHealth().then(() => setBackendOk(true)).catch(() => setBackendOk(false));
+                }}
+                className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-[11px] font-semibold transition-colors"
+              >
+                Retry Ping
+              </button>
             )}
           </div>
 
@@ -365,7 +396,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || selectedFiles.length === 0 || backendOk === false}
+              disabled={isSubmitting || selectedFiles.length === 0}
               className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white shadow-md shadow-blue-600/30 transition-all"
             >
               {isSubmitting ? (

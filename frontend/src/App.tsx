@@ -74,15 +74,35 @@ export default function App() {
         try {
           const status = await budgetApi.getAnalysisStatus(currentWorkspace.id);
           setStatusData(status);
+
+          // Update currentWorkspace progress in real time so the UI progress bar smoothly updates
+          if (status.progress) {
+            setCurrentWorkspace((prev) => prev ? {
+              ...prev,
+              processing_status: status.status as any,
+              processing_progress: status.progress,
+            } : null);
+          }
+
           if (status.status === 'completed') {
             clearInterval(interval);
-            loadAnalysis(currentWorkspace.id);
-            loadWorkspaces();
+            setCurrentWorkspace((prev) => prev ? {
+              ...prev,
+              processing_status: 'completed',
+              processing_progress: 100.0,
+              analysis_completed: true,
+            } : null);
+            await loadAnalysis(currentWorkspace.id);
+            await loadWorkspaces();
           } else if (status.status === 'uploaded') {
             // Re-trigger if still sitting in uploaded
             budgetApi.startAnalysis(currentWorkspace.id).catch(() => {});
           } else if (status.status === 'failed') {
             clearInterval(interval);
+            setCurrentWorkspace((prev) => prev ? {
+              ...prev,
+              processing_status: 'failed',
+            } : null);
           }
         } catch (e: any) {
           console.error('Status poll error:', e);
@@ -92,25 +112,30 @@ export default function App() {
             setWorkspaceLostError(true);
           }
         }
-      }, 3000);
+      }, 2500);
     }
     return () => clearInterval(interval);
-  }, [currentWorkspace]);
+  }, [currentWorkspace?.id, currentWorkspace?.processing_status]);
 
-  // 3. Load analysis data when current workspace changes
+  // 3. Load analysis data when current workspace changes or completes
   useEffect(() => {
     if (currentWorkspace && (currentWorkspace.analysis_completed || currentWorkspace.processing_status === 'completed')) {
       loadAnalysis(currentWorkspace.id);
     } else {
       setAnalysisData(null);
     }
-  }, [currentWorkspace]);
+  }, [currentWorkspace?.id, currentWorkspace?.processing_status, currentWorkspace?.analysis_completed]);
 
   const loadWorkspaces = async () => {
     setIsLoading(true);
     try {
       const res = await budgetApi.listWorkspaces();
       setWorkspaces(res.workspaces);
+      setCurrentWorkspace((curr) => {
+        if (!curr) return null;
+        const fresh = res.workspaces.find((w: Workspace) => w.id === curr.id);
+        return fresh ? { ...curr, ...fresh } : curr;
+      });
     } catch (e) {
       console.error('Failed to load workspaces:', e);
     } finally {
